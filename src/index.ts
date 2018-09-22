@@ -1,4 +1,4 @@
-import { ServerApp } from './app';
+import { ServerApp } from './app/app';
 
 const port: string = process.env.PORT || '8080';
 

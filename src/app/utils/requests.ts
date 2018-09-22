@@ -1,4 +1,4 @@
-import { ClientRequest, get, request, RequestOptions } from 'http';
+import { ClientRequest, request, RequestOptions } from 'http';
 import { parse } from 'url';
 
 import { HTTPMethods, ResponseData } from './models';

@@ -34,15 +34,9 @@ module.exports = (env, argv) => {
         },
         module: {
             rules: [
-                {
-                    test: /client.ts$/,
-                    use: [{ loader: 'raw-loader' }, { loader: 'uglify-es-loader' }]
-                },
-                {
-                    test: /style.css$/,
-                    use: [{ loader: 'raw-loader' }]
-                },
+                { test: /client.ts$/, use: [{ loader: 'raw-loader' }, { loader: 'uglify-es-loader' }] },
                 { test: /\.ts$/, use: [{ loader: 'awesome-typescript-loader' }] },
+                { test: /\.css$/, use: [{ loader: 'raw-loader' }] },
                 { test: /\.html$/, use: [{ loader: 'html-loader', options: { interpolate: 'require', minimize: true, removeComments: false, minifyCSS: true } }] }
             ]
         },

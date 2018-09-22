@@ -1,16 +1,14 @@
-import { createHash } from 'crypto';
-import { createServer, IncomingMessage, Server } from 'http';
-import { AddressInfo, Socket } from 'net';
+import { createServer, Server } from 'http';
+import { AddressInfo } from 'net';
 
 import {
     BodyNewJob, BodyNewRemovePeer, BodyRemoveJob, BodySync, CurrentJob, Endpoints, HTTPCodes, HTTPMethods, IntervalUnit, Job, NodeHttpErrors, Peer, PeerStatus, RequestVoteOrDone,
     ResponseData, ResponseHeartbeat, ResponseSync
-} from './models';
-import { makeGetRequest, makePostRequest } from './requests';
-import { Settings } from './settings';
-import { SocketHandler } from './socket-handler';
+} from './utils/models';
+import { makeGetRequest, makePostRequest } from './utils/requests';
+import { Settings } from './utils/settings';
 
-let html: string = require('./client/index.html');
+let html: string = require('./client/client.html');
 html = html.replace(/\s*<!--\s*/g, '').replace(/\s*-->\s*/g, '');
 
 export interface AppState {

@@ -1,11 +1,5 @@
 import { AppState } from '../app';
-import { BodyNewJob, BodyNewRemovePeer, Endpoints, HTTPMethods, Job, Peer, PeerStatus } from '../models';
-
-const protocol: string = window.location.protocol === 'http:' ? 'ws://' : 'wss://';
-
-window.onload = () => {
-    // initNewJobStartTime();
-};
+import { BodyNewJob, BodyNewRemovePeer, Endpoints, HTTPMethods, Job, Peer, PeerStatus } from '../utils/models';
 
 fetch(window.location.origin + Endpoints.GET_STATE)
     .then(response => response.json())
