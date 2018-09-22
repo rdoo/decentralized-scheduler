@@ -1,5 +1,7 @@
 import { AppState } from '../app';
-import { BodyNewJob, BodyNewRemovePeer, Endpoints, HTTPMethods, Job, Peer, PeerStatus } from '../utils/models';
+import { Peer, PeerStatus } from '../peer';
+import { Endpoints, HTTPMethods } from '../utils/constants';
+import { BodyNewJob, BodyNewRemovePeer, Job } from '../utils/models';
 
 fetch(window.location.origin + Endpoints.GET_STATE)
     .then(response => response.json())

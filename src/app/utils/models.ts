@@ -1,52 +1,5 @@
-export const enum HTTPCodes {
-    OK = 200,
-    NOT_FOUND = 404
-}
-
-export const enum HTTPMethods {
-    GET = 'GET',
-    POST = 'POST'
-}
-
-export const enum NodeHttpErrors {
-    ECONNREFUSED = 'ECONNREFUSED',
-    ENOTFOUND = 'ENOTFOUND',
-    ECONNRESET = 'ECONNRESET'
-}
-
-export const enum Endpoints {
-    INDEX = '/',
-    GET_STATE = '/gs',
-    ADD_NEW_PEER = '/ap',
-    REMOVE_PEER = '/rp',
-    ADD_NEW_JOB = '/aj',
-    REMOVE_JOB = '/rj',
-    HEARTBEAT = '/hb',
-    FORCE_DEATH = '/fd',
-    VOTE = '/v',
-    DONE = '/d',
-    SYNC = '/sy'
-}
-
-export const enum PeerStatus {
-    ONLINE,
-    OFFLINE,
-    UNKNOWN,
-    OLD_VERSION,
-    DESYNC
-}
-
-export const enum IntervalUnit {
-    MINUTE = 'm',
-    HOUR = 'h',
-    DAY = 'D',
-    MONTH = 'M'
-}
-
-export interface Peer {
-    host: string;
-    status: PeerStatus;
-}
+import { Peer } from '../peer';
+import { IntervalUnit } from './constants';
 
 export interface Job {
     id: number;
@@ -59,7 +12,7 @@ export interface Job {
 }
 
 export interface CurrentJob {
-    id: number;
+    id?: number;
     votingTimeout: any;
     executeTimeout: any;
     extraTimeout: any;
