@@ -1,0 +1,48 @@
+<title>Decentralized Scheduler</title>
+<!-- <script>${require("./client")}</script> -->
+<!-- <style>${require("./style.css")}</style> -->
+
+<body>
+    <h1>Decentralized Scheduler</h1>
+    <div>
+        <span>Version:</span>
+        <span id="version"></span>
+    </div>
+    <div>
+        <span>Last update:</span>
+        <span id="updateTime"></span>
+    </div>
+    <section>
+        <h2>Jobs</h2>
+        <div id="jobs"></div>
+        <form onsubmit="return addNewJob(this)">
+            <div>Add new job</div>
+            <div>
+                <input name="endpoint" placeholder="Job endpoint" required pattern="https?://.+" />
+                <input id="startTimeCheckbox" type="checkbox" onchange="toggleNewJobStartTime(this)" />
+                <label for="startTimeCheckbox">Custom start time</label>
+                <input id="newJobStartTime" name="startTime" type="datetime-local" disabled />
+            </div>
+            <div>
+                <input name="intervalValue" type="number" placeholder="Job interval" required min="1" />
+                <input type="radio" id="m" name="intervalUnit" value="m" checked />
+                <label for="m">m</label>
+                <input type="radio" id="h" name="intervalUnit" value="h" />
+                <label for="h">h</label>
+                <input type="radio" id="D" name="intervalUnit" value="D" />
+                <label for="D">D</label>
+                <input type="radio" id="M" name="intervalUnit" value="M" />
+                <label for="M">M</label>
+                <button>ADD</button>
+            </div>
+        </form>
+    </section><section>
+        <h2>Peers</h2>
+        <div id="peers"></div>
+        <form onsubmit="return addNewPeer(this)">
+            <div>Add new peer</div>
+            <input name="host" placeholder="Peer host" required pattern="https?://.+" />
+            <button>ADD</button>
+        </form>
+    </section>
+</body>

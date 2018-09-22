@@ -1,0 +1,21 @@
+{
+  "name": "decentralized-scheduler",
+  "version": "1.0.0",
+  "license": "MIT",
+  "scripts": {
+    "start": "webpack --watch --mode development",
+    "build": "webpack --mode production"
+  },
+  "devDependencies": {
+    "@types/node": "^10.10.3",
+    "awesome-typescript-loader": "^5.2.1",
+    "html-loader": "^0.5.5",
+    "raw-loader": "^0.5.1",
+    "run-node-webpack-plugin": "^1.1.0",
+    "typescript": "^3.0.3",
+    "uglify-es-loader": "^3.0.3",
+    "uglify-js": "^3.4.9",
+    "webpack": "^4.19.1",
+    "webpack-cli": "^3.1.0"
+  }
+}
