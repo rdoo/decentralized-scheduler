@@ -1,7 +1,7 @@
 import { CurrentJob, Job, JobSerialized } from './job';
 import { Peer, PeerStatus } from './peer';
 import { Endpoints } from './utils/constants';
-import { randomInteger } from './utils/helpers';
+import { getFromArrayById } from './utils/helpers';
 import { NewJobBody, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
 import { makeGetRequest, makePostRequest } from './utils/requests';
 import { Settings } from './utils/settings';
@@ -24,22 +24,37 @@ export class StateHandler {
     jobs: Job[] = [];
 
     syncState(data: SyncBody) {
-        this.peers.splice(0, this.peers.length);
-        this.peers.push(...data.p.map(peer => new Peer(peer.host, peer.status)));
-        this.getUnknownAndDesyncPeers().forEach(peer => peer.updateStatus(this.version, this.updateTime));
-        // todo lepiej porownywac joby i usuwac tylko niepotrzebne
-        this.jobs.splice(0, this.jobs.length);
-        this.jobs.push(
-            ...data.j.map(job => {
-                const newJob: Job = new Job(job.id, job.endpoint, job.startTime, job.intervalValue, job.intervalUnit, job.executions);
-                // newJob.currentJob = this.createCurrentJob(newJob);
-                return newJob;
-            })
-        );
         this.updateTime = data.u;
         this.timeDiff = data.t - Date.now();
         this.myHost = data.r;
+
+        this.peers.splice(0, this.peers.length);
+        this.peers.push(...data.p.map(peer => new Peer(peer.host, peer.status)));
         this.getPeer(this.myHost).status = PeerStatus.ONLINE;
+        this.getUnknownAndDesyncPeers().forEach(peer => peer.updateStatus(this.version, this.updateTime));
+
+        for (let i = 0; i < this.jobs.length; i++) {
+            const job: Job = this.jobs[i];
+            const newJobSerialized: JobSerialized = getFromArrayById(data.j, job.id);
+            if (newJobSerialized === null) {
+                // jesli nie ma nowego joba z takim id to usun
+                job.clearCurrentJob();
+                this.jobs.splice(i, 1);
+            } else if (!job.equal(newJobSerialized) || job.executions < newJobSerialized.executions) {
+                // jesli jest ale inny to usun i stworz nowego
+                job.clearCurrentJob();
+                this.jobs.splice(i, 1);
+                this.initNewJob(newJobSerialized);
+            }
+        }
+
+        // dodaj brakujace joby
+        for (const newJobSerialized of data.j) {
+            const job: Job = getFromArrayById(this.jobs, newJobSerialized.id);
+            if (job === null) {
+                this.initNewJob(newJobSerialized);
+            }
+        }
     }
 
     getState(): StateSerialized {
@@ -99,9 +114,8 @@ export class StateHandler {
             r: null
         });
         if (success) {
-            // newJob.currentJob = this.createCurrentJob(newJob);
-            this.initJob(newJob);
             this.jobs.push(newJob);
+            newJob.currentJob.jobTimeout = setTimeout(() => this.getVotes(newJob), newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME);
             this.updateTime = data.updateTime;
             this.timeDiff = 0;
         }
@@ -184,26 +198,32 @@ export class StateHandler {
         }
     }
 
-    initJob(job: Job) {
-        const now: number = Date.now() + this.timeDiff;
-        job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), job.nextExecute - now - Settings.VOTING_START_TIME);
+    initNewJob(newJobSerialized: JobSerialized) {
+        const newJob: Job = new Job(
+            newJobSerialized.id,
+            newJobSerialized.endpoint,
+            newJobSerialized.startTime,
+            newJobSerialized.intervalValue,
+            newJobSerialized.intervalUnit,
+            newJobSerialized.executions
+        );
+        let voteTimeout: number = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
+        while (voteTimeout < 0) {
+            newJob.markDone(1);
+            voteTimeout = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
+        }
+        newJob.currentJob.jobTimeout = setTimeout(() => this.getVotes(newJob), voteTimeout);
+        this.jobs.push(newJob);
     }
-
-    // createCurrentJob(job: Job) {
-
-    //     job.createCurrentJob();
-
-    // }
 
     async getVotes(job: Job) {
         console.log('Voting', job.endpoint);
         console.log('My vote', job.currentJob.myVote);
-        // job.currentJob.tries++;
+
         if (job.currentJob.tries > 5) {
             console.log('Terminating job', job.endpoint);
             return;
         }
-        // job.getMyVote();
 
         job.currentJob.jobTimeout = setTimeout(() => this.chooseWinner(job), Settings.VOTING_WINDOW);
 
@@ -261,18 +281,15 @@ export class StateHandler {
             console.log('Job was executed');
         } else {
             console.log('Trying once again');
-            // job.clearCurrentJob();
-            // currentJob.myVote = null;
-            // currentJob.votes = [];
             job.vote();
             currentJob.jobTimeout = setTimeout(() => this.getVotes(job), Settings.NEXT_VOTE_DELAY);
         }
     }
 
     handleJobDone(job: Job, timesDone: number) {
+        console.log('Job done', job.endpoint);
         job.markDone(timesDone);
-        job.createCurrentJob();
-        // job.currentJob = this.createCurrentJob(job);
+        job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), job.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME);
     }
 
     getJobVote(id: number, executions: number): number {

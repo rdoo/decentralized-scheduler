@@ -63,9 +63,25 @@ export class Job {
         this.executions += timesDone;
         this.nextExecute = this.calculateExecuteTime();
         this.clearCurrentJob();
+        this.createCurrentJob();
     }
 
-    // co jesli jest 2 winnerow
+    clearCurrentJob() {
+        clearTimeout(this.currentJob.jobTimeout);
+    }
+
+    createCurrentJob() {
+        this.currentJob = { tries: 0 };
+        this.vote();
+    }
+
+    vote() {
+        const vote: number = randomInteger();
+        this.currentJob.myVote = vote;
+        this.currentJob.votes = [vote];
+        this.currentJob.tries++;
+    }
+
     getWinnerVote() {
         if (this.currentJob.votes.length < 2) {
             return null;
@@ -81,34 +97,17 @@ export class Job {
         return winnerVote;
     }
 
-    // getMyVote() {
-    //     if (this.currentJob.myVote === null) {
-    //         this.currentJob.myVote = Math.floor(Math.random() * 1e9);
-    //         console.log('Wylosowano', this.currentJob.myVote);
-    //         this.currentJob.votes.push(this.currentJob.myVote);
-    //     }
-    //     return this.currentJob.myVote;
-    // }
-
-    createCurrentJob() {
-        if (this.currentJob) {
-            this.clearCurrentJob();
+    equal(job: JobSerialized) {
+        if (
+            this.id === job.id &&
+            this.endpoint === job.endpoint &&
+            this.startTime === job.startTime &&
+            this.intervalValue === job.intervalValue &&
+            this.intervalUnit === job.intervalUnit
+        ) {
+            return true;
         }
-
-        this.currentJob = { tries: 0 };
-        this.vote();
-    }
-
-    clearCurrentJob() {
-        clearTimeout(this.currentJob.jobTimeout);
-    }
-
-    vote() {
-        const vote: number = randomInteger();
-        console.log('Wylosowano', this.currentJob.myVote);
-        this.currentJob.myVote = vote;
-        this.currentJob.votes = [vote];
-        this.currentJob.tries++;
+        return false;
     }
 
     serialize(): JobSerialized {
