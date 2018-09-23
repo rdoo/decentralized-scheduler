@@ -1,20 +1,21 @@
-import { CurrentJob, Job, JobInterface } from './job';
-import { Peer, PeerStatus, syncPeers } from './peer';
+import { CurrentJob, Job, JobSerialized } from './job';
+import { Peer, PeerStatus } from './peer';
 import { Endpoints } from './utils/constants';
-import { NewJobBody, RequestResponseData, SyncBody } from './utils/models';
+import { randomInteger } from './utils/helpers';
+import { NewJobBody, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
 import { makeGetRequest, makePostRequest } from './utils/requests';
 import { Settings } from './utils/settings';
 
-export interface State {
+export interface StateSerialized {
     version: number;
     myHost: string;
     updateTime: number;
-    timeDiff: number;
+    time: number;
     peers: Peer[];
-    jobs: Job[];
+    jobs: JobSerialized[];
 }
 
-export class StateHandler implements State {
+export class StateHandler {
     version: number = Settings.VERSION;
     myHost: string = null;
     updateTime: number = 0;
@@ -30,8 +31,8 @@ export class StateHandler implements State {
         this.jobs.splice(0, this.jobs.length);
         this.jobs.push(
             ...data.j.map(job => {
-                const newJob: Job = new Job(job.id, job.endpoint, job.startTime, job.intervalValue, job.intervalUnit, job.nextExecute);
-                newJob.currentJob = this.createCurrentJob(newJob);
+                const newJob: Job = new Job(job.id, job.endpoint, job.startTime, job.intervalValue, job.intervalUnit, job.executions);
+                // newJob.currentJob = this.createCurrentJob(newJob);
                 return newJob;
             })
         );
@@ -41,8 +42,8 @@ export class StateHandler implements State {
         this.getPeer(this.myHost).status = PeerStatus.ONLINE;
     }
 
-    getState() {
-        return { version: this.version, myHost: this.myHost, updateTime: this.updateTime, peers: this.peers, jobs: this.serializeJobs() };
+    getState(): StateSerialized {
+        return { version: this.version, myHost: this.myHost, updateTime: this.updateTime, time: Date.now() + this.timeDiff, peers: this.peers, jobs: this.serializeJobs() };
     }
 
     async heartbeat() {
@@ -58,7 +59,7 @@ export class StateHandler implements State {
     async addPeer(newPeer: Peer, updateTime: number) {
         const newPeers: Peer[] = [...this.peers, newPeer];
         const peersToSend: Peer[] = [...this.getOnlineAndDesyncPeers(), newPeer];
-        const success: boolean = await syncPeers(peersToSend, this.myHost, { p: newPeers, j: this.serializeJobs(), u: updateTime, t: Date.now(), r: null }); // todo serializowac jobs
+        const success: boolean = await this.syncPeers(peersToSend, { p: newPeers, j: this.serializeJobs(), u: updateTime, t: Date.now(), r: null });
         if (success) {
             if (!this.getPeer(newPeer.host)) {
                 this.peers.push(newPeer);
@@ -71,7 +72,7 @@ export class StateHandler implements State {
 
     async removePeer(peerToRemove: Peer, updateTime: number) {
         const newPeers: Peer[] = this.peers.filter(peer => peer !== peerToRemove);
-        const success: boolean = await syncPeers(this.getOnlineAndDesyncPeers().filter(peer => peer !== peerToRemove), this.myHost, {
+        const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers().filter(peer => peer !== peerToRemove), {
             p: newPeers,
             j: this.serializeJobs(),
             u: updateTime,
@@ -89,8 +90,8 @@ export class StateHandler implements State {
 
     async addJob(data: NewJobBody) {
         const newJob: Job = new Job(this.getNewJobId(), data.endpoint, data.startTime, data.intervalValue, data.intervalUnit);
-        const newJobs: JobInterface[] = [...this.serializeJobs(), newJob.serialize()];
-        const success: boolean = await syncPeers(this.getOnlineAndDesyncPeers(), this.myHost, {
+        const newJobs: JobSerialized[] = [...this.serializeJobs(), newJob.serialize()];
+        const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
             p: this.peers,
             j: newJobs,
             u: data.updateTime,
@@ -98,7 +99,8 @@ export class StateHandler implements State {
             r: null
         });
         if (success) {
-            newJob.currentJob = this.createCurrentJob(newJob);
+            // newJob.currentJob = this.createCurrentJob(newJob);
+            this.initJob(newJob);
             this.jobs.push(newJob);
             this.updateTime = data.updateTime;
             this.timeDiff = 0;
@@ -107,8 +109,8 @@ export class StateHandler implements State {
     }
 
     async removeJob(jobToRemove: Job, updateTime: number) {
-        const newJobs: JobInterface[] = this.jobs.filter(job => job !== jobToRemove).map(job => job.serialize());
-        const success: boolean = await syncPeers(this.getOnlineAndDesyncPeers(), this.myHost, {
+        const newJobs: JobSerialized[] = this.jobs.filter(job => job !== jobToRemove).map(job => job.serialize());
+        const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
             p: this.peers,
             j: newJobs,
             u: updateTime,
@@ -122,6 +124,12 @@ export class StateHandler implements State {
             this.timeDiff = 0;
         }
         return success;
+    }
+
+    async syncPeers(peers: Peer[], syncData: SyncBody): Promise<boolean> {
+        const responses: SyncResponse[] = await Promise.all(peers.map(peer => peer.sync(syncData)));
+        // return true if at least one other peer responded OK or it wasnt send to any peer
+        return responses.some(item => item.success && item.peer.host !== this.myHost) || responses.length === 0;
     }
 
     getPeer(host: string) {
@@ -176,22 +184,30 @@ export class StateHandler implements State {
         }
     }
 
-    createCurrentJob(job: Job): CurrentJob {
+    initJob(job: Job) {
         const now: number = Date.now() + this.timeDiff;
-        return {
-            votes: [],
-            myVote: null,
-            timeout: setTimeout(() => this.getVotes(job), job.nextExecute - now - Settings.VOTING_START_TIME)
-        };
+        job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), job.nextExecute - now - Settings.VOTING_START_TIME);
     }
 
+    // createCurrentJob(job: Job) {
+
+    //     job.createCurrentJob();
+
+    // }
+
     async getVotes(job: Job) {
-        console.log('Voting');
-        job.getMyVote();
+        console.log('Voting', job.endpoint);
+        console.log('My vote', job.currentJob.myVote);
+        // job.currentJob.tries++;
+        if (job.currentJob.tries > 5) {
+            console.log('Terminating job', job.endpoint);
+            return;
+        }
+        // job.getMyVote();
 
-        job.currentJob.timeout = setTimeout(() => this.chooseWinner(job), Settings.VOTING_WINDOW);
+        job.currentJob.jobTimeout = setTimeout(() => this.chooseWinner(job), Settings.VOTING_WINDOW);
 
-        const data: RequestResponseData[] = await Promise.all(this.getOnlinePeers().map(peer => peer.getVoteForJob(job).catch(error => error)));
+        const data: ResponseWrapper[] = await Promise.all(this.getOnlinePeers().map(peer => peer.getVoteForJob(job).catch(error => error)));
         console.log(data);
         for (const item of data) {
             const vote: number = parseInt(item.data, 10);
@@ -202,24 +218,26 @@ export class StateHandler implements State {
     }
 
     chooseWinner(job: Job) {
-        console.log('Lista votow', job.currentJob.votes);
+        console.log('Lista votow', job.endpoint, job.currentJob.votes);
         const winnerVote: number = job.getWinnerVote();
         if (winnerVote === null) {
             console.log('No winner');
-            job.currentJob.timeout = setTimeout(() => this.getVotes(job), 0);
+            job.vote();
+            job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), Settings.NEXT_VOTE_DELAY);
         } else {
             const executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
             if (job.currentJob.myVote === winnerVote) {
                 console.log('Zwyciestwo');
-                job.currentJob.timeout = setTimeout(() => this.executeJob(job), executeTime);
+                job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job), executeTime);
             } else {
-                job.currentJob.timeout = setTimeout(() => this.checkIfExecuted(job), executeTime + Settings.EXECUTE_WINDOW);
+                const jobExecutions: number = job.executions;
+                job.currentJob.jobTimeout = setTimeout(() => this.checkIfExecuted(job, jobExecutions), executeTime + Settings.EXECUTE_WINDOW);
             }
         }
     }
 
     async executeJob(job: Job) {
-        console.log('Executing job');
+        console.log('Executing job', job.endpoint);
         try {
             await makeGetRequest(job.endpoint);
         } catch (error) {
@@ -227,50 +245,59 @@ export class StateHandler implements State {
             return;
         }
 
-        // wyslanie musi byc wczesniej niz calculateExecuteTime
+        // wyslanie musi byc wczesniej niz zwiekszenie  executions
+        // todo przeniesc do innego pliku?
         this.getOnlinePeers().forEach(peer => {
-            makePostRequest(peer.host + Endpoints.JOB_DONE, { id: job.id, exe: job.nextExecute });
+            makePostRequest(peer.host + Endpoints.JOB_DONE, { id: job.id, exe: job.executions });
         });
 
-        this.handleJobDone(job); // todo moze robic to po poinformowaniu, trzeba podac ktore wykonanie
-        // todo przeniesc do innego pliku?
+        this.handleJobDone(job, 1); // todo moze robic to po poinformowaniu, trzeba podac ktore wykonanie
     }
 
-    checkIfExecuted(job: Job) {
-        console.log('Check execution');
+    checkIfExecuted(job: Job, executions: number) {
+        console.log('Check execution', job.endpoint);
         const currentJob: CurrentJob = job.currentJob;
-        // todo moze jakis status
-        if (currentJob.myVote === null) {
+        if (job.executions === executions + 1) {
             console.log('Job was executed');
         } else {
-            job.clearCurrentJob();
-            currentJob.myVote = null;
-            currentJob.votes = [];
-            currentJob.timeout = setTimeout(() => this.getVotes(job), 0);
+            console.log('Trying once again');
+            // job.clearCurrentJob();
+            // currentJob.myVote = null;
+            // currentJob.votes = [];
+            job.vote();
+            currentJob.jobTimeout = setTimeout(() => this.getVotes(job), Settings.NEXT_VOTE_DELAY);
         }
     }
 
-    handleJobDone(job: Job) {
-        job.nextExecute = job.calculateExecuteTime(job.nextExecute);
-        job.clearCurrentJob();
-        job.currentJob = this.createCurrentJob(job);
+    handleJobDone(job: Job, timesDone: number) {
+        job.markDone(timesDone);
+        job.createCurrentJob();
+        // job.currentJob = this.createCurrentJob(job);
     }
 
-    getJobVote(id: number, nextExecute: number): number {
+    getJobVote(id: number, executions: number): number {
         const job: Job = this.getJob(id);
-        if (job && job.nextExecute === nextExecute) {
-            // todo jak nextExecute sie nie zgadza to usunac?
-            return job.getMyVote();
+        if (job) {
+            if (job.executions === executions) {
+                return job.currentJob.myVote;
+            } else if (job.executions < executions) {
+                this.handleJobDone(job, executions - job.executions); // todo przemyslec
+                return job.currentJob.myVote;
+            }
         }
         return null;
     }
 
-    getJobDone(id: number, nextExecute: number): boolean {
+    getJobDone(id: number, executions: number): boolean {
         const job: Job = this.getJob(id);
-        if (job && job.nextExecute === nextExecute) {
-            // todo jak nextExecute sie nie zgadza to usunac?
-            this.handleJobDone(job);
-            return true;
+        if (job) {
+            if (job.executions === executions) {
+                this.handleJobDone(job, 1);
+                return true;
+            } else if (job.executions < executions) {
+                this.handleJobDone(job, executions - job.executions + 1); // todo przemyslec +1
+                return true;
+            }
         }
         return false;
     }

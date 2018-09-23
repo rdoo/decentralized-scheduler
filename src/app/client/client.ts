@@ -1,14 +1,24 @@
 import { Job } from '../job';
 import { Peer, PeerStatus } from '../peer';
-import { State } from '../state-handler';
-import { Endpoints, HTTPMethods } from '../utils/constants';
+import { StateSerialized } from '../state-handler';
+import { Endpoints, HTTPMethods, TimeConstants } from '../utils/constants';
 import { NewJobBody, NewRemovePeerBody } from '../utils/models';
+
+let timeDiff: number = 0;
+
+window.onload = () => {
+    const timeElement: HTMLHeadingElement = <HTMLHeadingElement>document.getElementById('time');
+    timeElement.innerText = new Date(Date.now() + timeDiff).toLocaleTimeString();
+    setInterval(() => (timeElement.innerText = new Date(Date.now() + timeDiff).toLocaleTimeString()), TimeConstants.SECOND);
+};
 
 fetch(window.location.origin + Endpoints.GET_STATE)
     .then(response => response.json())
     .then(data => updateView(data));
 
-function updateView(data: State) {
+function updateView(data: StateSerialized) {
+    timeDiff = data.time - Date.now();
+
     document.getElementById('version').innerText = data.version.toString();
     if (data.updateTime === 0) {
         document.getElementById('updateTime').innerText = 'No updates or not synced';
@@ -46,13 +56,12 @@ function updateView(data: State) {
     } else {
         jobsElement.appendChild(
             createTable(
-                ['Id', 'Endpoint', 'Start time', 'Next execute', 'Interval', 'Actions'],
+                ['Endpoint', 'Interval', 'Start time', 'Next execute', 'Actions'],
                 [
-                    (dataCell: HTMLTableDataCellElement, item: Job) => (dataCell.innerText = item.id.toString()),
                     (dataCell: HTMLTableDataCellElement, item: Job) => (dataCell.innerText = item.endpoint),
+                    (dataCell: HTMLTableDataCellElement, item: Job) => (dataCell.innerText = item.intervalValue.toString() + item.intervalUnit),
                     (dataCell: HTMLTableDataCellElement, item: Job) => (dataCell.innerText = new Date(item.startTime).toLocaleString()),
                     (dataCell: HTMLTableDataCellElement, item: Job) => (dataCell.innerText = new Date(item.nextExecute).toLocaleString()),
-                    (dataCell: HTMLTableDataCellElement, item: Job) => (dataCell.innerText = item.intervalValue.toString() + item.intervalUnit),
                     (dataCell: HTMLTableDataCellElement, item: Job) => {
                         const button: HTMLButtonElement = document.createElement('button');
                         button.onclick = () => removeJob(item);

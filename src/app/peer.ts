@@ -1,6 +1,6 @@
 import { Job } from './job';
 import { Endpoints, HTTPCodes, NodeHttpErrors } from './utils/constants';
-import { HeartbeatResponse, RequestResponseData, SyncBody, SyncResponse } from './utils/models';
+import { HeartbeatResponse, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
 import { makeGetRequest, makePostRequest } from './utils/requests';
 import { Settings } from './utils/settings';
 
@@ -23,7 +23,7 @@ export class Peer {
 
     async updateStatus(currentVersion: number, currentUpdateTime: number) {
         try {
-            const responseData: RequestResponseData = await makeGetRequest(this.host + Endpoints.HEARTBEAT);
+            const responseData: ResponseWrapper = await makeGetRequest(this.host + Endpoints.HEARTBEAT);
             if (responseData.code === HTTPCodes.OK) {
                 const data: HeartbeatResponse = JSON.parse(responseData.data); // todo try catch
                 if (data.v !== undefined && data.v !== currentVersion) {
@@ -58,7 +58,7 @@ export class Peer {
                 resolve({ success: false, peer: this });
             }, Settings.REQUEST_TIMEOUT);
 
-            let responseData: RequestResponseData;
+            let responseData: ResponseWrapper;
             try {
                 responseData = await makePostRequest(this.host + Endpoints.SYNC_STATE, { p: syncData.p, j: syncData.j, u: syncData.u, t: syncData.t, r: this.host });
                 if (responseData.code === HTTPCodes.OK && responseData.data === '') {
@@ -80,12 +80,6 @@ export class Peer {
     }
 
     getVoteForJob(job: Job) {
-        return makePostRequest(this.host + Endpoints.JOB_VOTE, { id: job.id, exe: job.nextExecute });
+        return makePostRequest(this.host + Endpoints.JOB_VOTE, { id: job.id, exe: job.executions });
     }
-}
-
-export async function syncPeers(peers: Peer[], myHost: string, syncData: SyncBody): Promise<boolean> {
-    const responses: SyncResponse[] = await Promise.all(peers.map(peer => peer.sync(syncData)));
-    // return true if at least one other peer responded OK or it wasnt send to any peer
-    return responses.some(item => item.success && item.peer.host !== myHost) || responses.length === 0;
 }

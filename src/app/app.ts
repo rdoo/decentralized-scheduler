@@ -5,6 +5,7 @@ import { Job } from './job';
 import { Peer } from './peer';
 import { StateHandler } from './state-handler';
 import { Endpoints, HTTPCodes, HTTPMethods, IntervalUnit } from './utils/constants';
+import { formatHost } from './utils/helpers';
 import { NewJobBody, NewRemovePeerBody, RemoveJobBody, SyncBody, VoteOrDoneBody } from './utils/models';
 import { Settings } from './utils/settings';
 
@@ -28,7 +29,7 @@ export class ServerApp {
                     body += data;
                 });
             }
-            console.log(url);
+            console.log(new Date().toLocaleTimeString(), url);
 
             switch (url) {
                 case Endpoints.HEARTBEAT:
@@ -86,7 +87,7 @@ export class ServerApp {
                             response.end(JSON.stringify(this.stateHandler.getState()));
                             return;
                         }
-                        const newPeer: Peer = new Peer(bodyData.host);
+                        const newPeer: Peer = new Peer(formatHost(bodyData.host));
                         const success: boolean = await this.stateHandler.addPeer(newPeer, bodyData.updateTime);
                         if (success) {
                             response.writeHead(HTTPCodes.OK);
@@ -163,7 +164,7 @@ export class ServerApp {
     run() {
         this.server.listen(this.port, () => {
             console.log(new Date().toString().split(' ')[4] + ' - Server is listening on port ' + (this.server.address() as AddressInfo).port);
-            setInterval(async () => this.stateHandler.heartbeat(), Settings.HEARTBEAT_INTERVAL_TIME);
+            setInterval(() => this.stateHandler.heartbeat(), Settings.HEARTBEAT_INTERVAL_TIME);
         });
     }
 }

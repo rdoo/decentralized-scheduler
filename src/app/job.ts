@@ -1,42 +1,46 @@
 import { IntervalUnit, TimeConstants } from './utils/constants';
+import { randomInteger } from './utils/helpers';
 
-export interface JobInterface {
+export interface JobSerialized {
     id: number;
     endpoint: string;
     startTime: number;
     intervalValue: number;
     intervalUnit: IntervalUnit;
-    nextExecute: number;
+    executions?: number;
+    nextExecute?: number;
 }
 
 export interface CurrentJob {
-    timeout: any;
-    // executeTimeout: any;
-    // extraTimeout: any;
-    votes: number[];
-    myVote: number;
+    jobTimeout?: any;
+    tries: number;
+    votes?: number[];
+    myVote?: number;
 }
 
-export class Job implements JobInterface {
+export class Job {
     id: number;
     endpoint: string;
     startTime: number;
     intervalValue: number;
     intervalUnit: IntervalUnit;
+    executions: number;
     nextExecute: number;
     currentJob: CurrentJob;
 
-    constructor(id: number, endpoint: string, startTime: number, intervalValue: number, intervalUnit: IntervalUnit, nextExecute?: number) {
+    constructor(id: number, endpoint: string, startTime: number, intervalValue: number, intervalUnit: IntervalUnit, executions: number = 0) {
         this.id = id;
         this.endpoint = endpoint;
         this.startTime = startTime;
         this.intervalValue = intervalValue;
         this.intervalUnit = intervalUnit;
-        this.nextExecute = nextExecute || this.calculateExecuteTime(this.startTime);
+        this.executions = executions;
+        this.nextExecute = this.calculateExecuteTime();
+        this.createCurrentJob();
     }
 
-    calculateExecuteTime(startTime: number) {
-        let value: number = this.intervalValue;
+    calculateExecuteTime() {
+        let value: number = this.intervalValue * (this.executions + 1);
         switch (this.intervalUnit) {
             case IntervalUnit.MINUTE:
                 value *= TimeConstants.MINUTE;
@@ -52,7 +56,13 @@ export class Job implements JobInterface {
                 break;
         }
 
-        return startTime + value;
+        return this.startTime + value;
+    }
+
+    markDone(timesDone: number) {
+        this.executions += timesDone;
+        this.nextExecute = this.calculateExecuteTime();
+        this.clearCurrentJob();
     }
 
     // co jesli jest 2 winnerow
@@ -71,28 +81,44 @@ export class Job implements JobInterface {
         return winnerVote;
     }
 
-    getMyVote() {
-        if (this.currentJob.myVote === null) {
-            this.currentJob.myVote = Math.floor(Math.random() * 1e9);
-            console.log('Wylosowano', this.currentJob.myVote);
-            this.currentJob.votes.push(this.currentJob.myVote);
+    // getMyVote() {
+    //     if (this.currentJob.myVote === null) {
+    //         this.currentJob.myVote = Math.floor(Math.random() * 1e9);
+    //         console.log('Wylosowano', this.currentJob.myVote);
+    //         this.currentJob.votes.push(this.currentJob.myVote);
+    //     }
+    //     return this.currentJob.myVote;
+    // }
+
+    createCurrentJob() {
+        if (this.currentJob) {
+            this.clearCurrentJob();
         }
-        return this.currentJob.myVote;
+
+        this.currentJob = { tries: 0 };
+        this.vote();
     }
 
     clearCurrentJob() {
-        clearTimeout(this.currentJob.timeout);
-        // clearTimeout(this.currentJob.executeTimeout);
-        // clearTimeout(this.currentJob.extraTimeout);
+        clearTimeout(this.currentJob.jobTimeout);
     }
 
-    serialize(): JobInterface {
+    vote() {
+        const vote: number = randomInteger();
+        console.log('Wylosowano', this.currentJob.myVote);
+        this.currentJob.myVote = vote;
+        this.currentJob.votes = [vote];
+        this.currentJob.tries++;
+    }
+
+    serialize(): JobSerialized {
         return {
             id: this.id,
             endpoint: this.endpoint,
             startTime: this.startTime,
             intervalValue: this.intervalValue,
             intervalUnit: this.intervalUnit,
+            executions: this.executions,
             nextExecute: this.nextExecute
         };
     }

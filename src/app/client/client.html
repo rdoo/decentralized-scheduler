@@ -3,15 +3,10 @@
 <!-- <style>${require("./client.css")}</style> -->
 
 <body>
-    <h1>Decentralized Scheduler</h1>
-    <div>
-        <span>Version:</span>
-        <span id="version"></span>
-    </div>
-    <div>
-        <span>Last update:</span>
-        <span id="updateTime"></span>
-    </div>
+    <header>
+        <h1>Decentralized Scheduler</h1>
+        <h3 id="time"></h3>
+    </header>
     <section>
         <h2>Jobs</h2>
         <div id="jobs"></div>
@@ -45,4 +40,11 @@
             <button>ADD</button>
         </form>
     </section>
+    <footer>
+        <span>Version:</span>
+        <span id="version"></span>
+        <span> | </span>
+        <span>Last update:</span>
+        <span id="updateTime"></span>
+    </footer>
 </body>

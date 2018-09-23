@@ -1,8 +1,8 @@
-import { JobInterface } from '../job';
+import { JobSerialized } from '../job';
 import { Peer } from '../peer';
 import { IntervalUnit } from './constants';
 
-export interface RequestResponseData {
+export interface ResponseWrapper {
     code: number;
     data: string;
 }
@@ -14,7 +14,7 @@ export interface HeartbeatResponse {
 
 export interface SyncBody {
     p: Peer[]; // peers
-    j: JobInterface[]; // jobs
+    j: JobSerialized[]; // jobs
     u: number; // updateTime
     t: number; // sender time
     r: string; // receiver
@@ -27,7 +27,7 @@ export interface SyncResponse {
 
 export interface VoteOrDoneBody {
     id: number;
-    exe: number; // next execute time
+    exe: number; // number of executions
 }
 
 // export interface VoteResponse {
