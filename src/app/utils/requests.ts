@@ -2,17 +2,17 @@ import { ClientRequest, request, RequestOptions } from 'http';
 import { parse } from 'url';
 
 import { HTTPMethods } from './constants';
-import { ResponseData } from './models';
+import { RequestResponseData } from './models';
 
-export function makeGetRequest(url: string): Promise<ResponseData> {
+export function makeGetRequest(url: string): Promise<RequestResponseData> {
     return makeRequest(HTTPMethods.GET, url);
 }
 
-export function makePostRequest(url: string, body?: any): Promise<ResponseData> {
+export function makePostRequest(url: string, body?: any): Promise<RequestResponseData> {
     return makeRequest(HTTPMethods.POST, url, body);
 }
 
-export function makeRequest(method: HTTPMethods, url: string, body?: any): Promise<ResponseData> {
+export function makeRequest(method: HTTPMethods, url: string, body?: any): Promise<RequestResponseData> {
     return new Promise((resolve, reject) => {
         const options: RequestOptions = Object.assign({ method }, parse(url));
         // console.log(options);

@@ -1,13 +1,14 @@
-import { AppState } from '../app';
+import { Job } from '../job';
 import { Peer, PeerStatus } from '../peer';
+import { State } from '../state-handler';
 import { Endpoints, HTTPMethods } from '../utils/constants';
-import { BodyNewJob, BodyNewRemovePeer, Job } from '../utils/models';
+import { NewJobBody, NewRemovePeerBody } from '../utils/models';
 
 fetch(window.location.origin + Endpoints.GET_STATE)
     .then(response => response.json())
     .then(data => updateView(data));
 
-function updateView(data: AppState) {
+function updateView(data: State) {
     document.getElementById('version').innerText = data.version.toString();
     if (data.updateTime === 0) {
         document.getElementById('updateTime').innerText = 'No updates or not synced';
@@ -88,7 +89,7 @@ function createTable(columns: string[], transforms: ((dataCell: HTMLTableDataCel
 }
 
 function addNewPeer(form: HTMLFormElement) {
-    const newPeer: BodyNewRemovePeer = { updateTime: Date.now() };
+    const newPeer: NewRemovePeerBody = { updateTime: Date.now() };
     new FormData(form).forEach((value, key) => (newPeer[key] = value));
 
     fetch(window.location.origin + Endpoints.ADD_NEW_PEER, {
@@ -120,7 +121,7 @@ function removePeer(peer: Peer) {
 }
 
 function addNewJob(form: HTMLFormElement) {
-    const newJob: BodyNewJob = { updateTime: Date.now() };
+    const newJob: NewJobBody = { updateTime: Date.now() };
     new FormData(form).forEach((value, key) => {
         switch (key) {
             case 'startTime':

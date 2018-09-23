@@ -1,71 +1,54 @@
+import { JobInterface } from '../job';
 import { Peer } from '../peer';
 import { IntervalUnit } from './constants';
 
-export interface Job {
-    id: number;
-    endpoint: string;
-    startTime: number;
-    nextExecute: number;
-    intervalValue: number;
-    intervalUnit: IntervalUnit;
-    currentJob?: CurrentJob;
-}
-
-export interface CurrentJob {
-    id?: number;
-    votingTimeout: any;
-    executeTimeout: any;
-    extraTimeout: any;
-    votes: number[];
-    myVote: number;
-}
-
-export interface ResponseData {
+export interface RequestResponseData {
     code: number;
     data: string;
 }
 
-export interface ResponseHeartbeat {
+export interface HeartbeatResponse {
     v: number; // version
     u: number; // updateTime
 }
 
-export interface BodySync {
+export interface SyncBody {
     p: Peer[]; // peers
-    j: Job[]; // jobs
+    j: JobInterface[]; // jobs
     u: number; // updateTime
+    t: number; // sender time
     r: string; // receiver
 }
 
-export interface ResponseSync {
+export interface SyncResponse {
     success: boolean;
     peer: Peer;
 }
+
+export interface VoteOrDoneBody {
+    id: number;
+    exe: number; // next execute time
+}
+
+// export interface VoteResponse {
+//     v: number; // vote
+// }
 
 interface Updatable {
     updateTime: number;
 }
 
-export interface BodyNewRemovePeer extends Updatable {
+export interface NewRemovePeerBody extends Updatable {
     host?: string;
 }
 
-export interface BodyNewJob extends Updatable {
+export interface NewJobBody extends Updatable {
     endpoint?: string;
     startTime?: number;
     intervalValue?: number;
     intervalUnit?: IntervalUnit;
 }
 
-export interface BodyRemoveJob extends Updatable {
+export interface RemoveJobBody extends Updatable {
     id: number;
-}
-
-export interface RequestVoteOrDone {
-    id: number;
-    exe: number; // next execute time
-}
-
-export interface ResponseVote {
-    v: number; // vote
 }

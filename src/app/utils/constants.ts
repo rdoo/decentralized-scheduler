@@ -1,3 +1,12 @@
+export const enum TimeConstants {
+    MILLISECOND = 1,
+    SECOND = MILLISECOND * 1000,
+    MINUTE = SECOND * 60,
+    HOUR = MINUTE * 60,
+    DAY = HOUR * 24,
+    MONTH = DAY * 30
+}
+
 export const enum HTTPCodes {
     OK = 200,
     BAD_REQUEST = 400,
