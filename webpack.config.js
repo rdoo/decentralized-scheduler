@@ -1,3 +1,4 @@
+const webpack = require('webpack');
 const path = require('path');
 const fs = require('fs');
 
@@ -11,7 +12,11 @@ fs.readdirSync('node_modules')
 module.exports = (env, argv) => {
     const IS_PRODUCTION_BUILD = argv.mode === 'production';
 
-    const webpackPlugins = [];
+    const webpackPlugins = [
+        new webpack.DefinePlugin({
+            IS_PRODUCTION_BUILD
+        })
+    ];
 
     if (!IS_PRODUCTION_BUILD) {
         webpackPlugins.push(new RunNodeWebpackPlugin());

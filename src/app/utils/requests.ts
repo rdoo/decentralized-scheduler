@@ -15,7 +15,6 @@ export function makePostRequest(url: string, body?: any): Promise<ResponseWrappe
 export function makeRequest(method: HTTPMethods, url: string, body?: any): Promise<ResponseWrapper> {
     return new Promise((resolve, reject) => {
         const options: RequestOptions = Object.assign({ method }, parse(url));
-        // console.log(options);
         const req: ClientRequest = request(options, response => {
             let data: string = '';
 
@@ -24,11 +23,9 @@ export function makeRequest(method: HTTPMethods, url: string, body?: any): Promi
             });
 
             response.on('end', () => {
-                // console.log(url, { code: response.statusCode, data: data.substring(0, 30) });
                 resolve({ code: response.statusCode, data });
             });
         }).on('error', (error: any) => {
-            // console.log(url, { code: error.code });
             reject(error);
         });
 

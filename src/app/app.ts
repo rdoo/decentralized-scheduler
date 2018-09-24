@@ -6,6 +6,7 @@ import { Peer } from './peer';
 import { StateHandler } from './state-handler';
 import { Endpoints, HTTPCodes, HTTPMethods, IntervalUnit } from './utils/constants';
 import { formatHost } from './utils/helpers';
+import { Logger } from './utils/logger';
 import { NewJobBody, NewRemovePeerBody, RemoveJobBody, SyncBody, VoteOrDoneBody } from './utils/models';
 import { Settings } from './utils/settings';
 
@@ -29,7 +30,6 @@ export class ServerApp {
                     body += data;
                 });
             }
-            console.log(new Date().toLocaleTimeString(), url);
 
             switch (url) {
                 case Endpoints.HEARTBEAT:
@@ -64,7 +64,7 @@ export class ServerApp {
                     break;
                 case Endpoints.SYNC_STATE:
                     request.on('end', () => {
-                        console.log('Getting sync', body);
+                        Logger.log('Getting sync', body);
                         const bodyData: SyncBody = JSON.parse(body);
                         this.stateHandler.syncState(bodyData);
                         response.writeHead(HTTPCodes.OK);
@@ -155,6 +155,7 @@ export class ServerApp {
                     process.exit();
                     break;
                 default:
+                    Logger.log(url);
                     response.writeHead(HTTPCodes.NOT_FOUND);
                     response.end();
             }

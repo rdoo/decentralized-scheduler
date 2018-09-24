@@ -1,5 +1,6 @@
 import { Job } from './job';
 import { Endpoints, HTTPCodes, NodeHttpErrors } from './utils/constants';
+import { Logger } from './utils/logger';
 import { HeartbeatResponse, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
 import { makeGetRequest, makePostRequest } from './utils/requests';
 import { Settings } from './utils/settings';
@@ -45,16 +46,16 @@ export class Peer {
                 this.status = PeerStatus.UNKNOWN;
                 return;
             }
-            console.error('nowy error code', error, error.code);
+            Logger.error('nowy error code', error, error.code);
             this.status = PeerStatus.UNKNOWN;
         }
     }
 
     sync(syncData: SyncBody): Promise<SyncResponse> {
-        console.log('Syncing peer', this.host);
+        Logger.log('Syncing peer', this.host);
         return new Promise(async (resolve, reject) => {
             setTimeout(() => {
-                // console.error('Timeouted');
+                // Logger.error('Timeouted');
                 resolve({ success: false, peer: this });
             }, Settings.REQUEST_TIMEOUT);
 
@@ -67,7 +68,7 @@ export class Peer {
                     return;
                 }
             } catch (error) {
-                console.error(error);
+                Logger.error(error);
                 resolve({ success: false, peer: this });
                 return;
             }
@@ -76,7 +77,7 @@ export class Peer {
     }
 
     kill() {
-        return makeGetRequest(this.host + Endpoints.FORCE_DEATH).catch(error => console.error(error));
+        return makeGetRequest(this.host + Endpoints.FORCE_DEATH).catch(error => Logger.error(error));
     }
 
     getVoteForJob(job: Job) {

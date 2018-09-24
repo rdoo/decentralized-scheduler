@@ -2,6 +2,7 @@ import { CurrentJob, Job, JobSerialized } from './job';
 import { Peer, PeerStatus } from './peer';
 import { Endpoints } from './utils/constants';
 import { getFromArrayById } from './utils/helpers';
+import { Logger } from './utils/logger';
 import { NewJobBody, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
 import { makeGetRequest, makePostRequest } from './utils/requests';
 import { Settings } from './utils/settings';
@@ -62,10 +63,10 @@ export class StateHandler {
     }
 
     async heartbeat() {
-        // console.log('Checking peers');
+        // Logger.log('Checking peers');
         await Promise.all(this.getOtherPeers().map(peer => peer.updateStatus(this.version, this.updateTime)));
-        // console.log('Peers after checking');
-        // console.log(this.peers);
+        // Logger.log('Peers after checking');
+        // Logger.log(this.peers);
 
         const syncData: SyncBody = { p: this.peers, j: this.serializeJobs(), u: this.updateTime, t: Date.now() + this.timeDiff, r: null };
         this.getDesyncPeers().forEach(peer => peer.sync(syncData));
@@ -217,18 +218,18 @@ export class StateHandler {
     }
 
     async getVotes(job: Job) {
-        console.log('Voting', job.endpoint);
-        console.log('My vote', job.currentJob.myVote);
+        Logger.log('Voting', job.endpoint);
+        Logger.log('My vote', job.currentJob.myVote);
 
         if (job.currentJob.tries > 5) {
-            console.log('Terminating job', job.endpoint);
+            Logger.log('Terminating job', job.endpoint);
             return;
         }
 
         job.currentJob.jobTimeout = setTimeout(() => this.chooseWinner(job), Settings.VOTING_WINDOW);
 
         const data: ResponseWrapper[] = await Promise.all(this.getOnlinePeers().map(peer => peer.getVoteForJob(job).catch(error => error)));
-        console.log(data);
+        Logger.log(data);
         for (const item of data) {
             const vote: number = parseInt(item.data, 10);
             if (!isNaN(vote)) {
@@ -238,16 +239,16 @@ export class StateHandler {
     }
 
     chooseWinner(job: Job) {
-        console.log('Lista votow', job.endpoint, job.currentJob.votes);
+        Logger.log('Lista votow', job.endpoint, job.currentJob.votes);
         const winnerVote: number = job.getWinnerVote();
         if (winnerVote === null) {
-            console.log('No winner');
+            Logger.log('No winner');
             job.vote();
             job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), Settings.NEXT_VOTE_DELAY);
         } else {
             const executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
             if (job.currentJob.myVote === winnerVote) {
-                console.log('Zwyciestwo');
+                Logger.log('Zwyciestwo');
                 job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job), executeTime);
             } else {
                 const jobExecutions: number = job.executions;
@@ -257,11 +258,11 @@ export class StateHandler {
     }
 
     async executeJob(job: Job) {
-        console.log('Executing job', job.endpoint);
+        Logger.log('Executing job', job.endpoint);
         try {
             await makeGetRequest(job.endpoint);
         } catch (error) {
-            console.error(error);
+            Logger.error(error);
             return;
         }
 
@@ -275,19 +276,19 @@ export class StateHandler {
     }
 
     checkIfExecuted(job: Job, executions: number) {
-        console.log('Check execution', job.endpoint);
+        Logger.log('Check execution', job.endpoint);
         const currentJob: CurrentJob = job.currentJob;
         if (job.executions === executions + 1) {
-            console.log('Job was executed');
+            Logger.log('Job was executed');
         } else {
-            console.log('Trying once again');
+            Logger.log('Trying once again');
             job.vote();
             currentJob.jobTimeout = setTimeout(() => this.getVotes(job), Settings.NEXT_VOTE_DELAY);
         }
     }
 
     handleJobDone(job: Job, timesDone: number) {
-        console.log('Job done', job.endpoint);
+        Logger.log('Job done', job.endpoint);
         job.markDone(timesDone);
         job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), job.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME);
     }
