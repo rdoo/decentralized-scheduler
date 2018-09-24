@@ -1,20 +1,11 @@
-import { CurrentJob, Job, JobSerialized } from './job';
+import { CurrentJob, Job } from './job';
 import { Peer, PeerStatus } from './peer';
 import { Endpoints } from './utils/constants';
 import { getFromArrayById } from './utils/helpers';
 import { Logger } from './utils/logger';
-import { NewJobBody, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
-import { makeGetRequest, makePostRequest } from './utils/requests';
+import { JobSerializedForSync, NewJobRequestBody, StateSerializedForSync, StateSerializedForWeb, SyncResult } from './utils/models';
+import { makeGetRequest, makePostRequest, ResponseWrapper } from './utils/requests';
 import { Settings } from './utils/settings';
-
-export interface StateSerialized {
-    version: number;
-    myHost: string;
-    updateTime: number;
-    time: number;
-    peers: Peer[];
-    jobs: JobSerialized[];
-}
 
 export class StateHandler {
     version: number = Settings.VERSION;
@@ -24,24 +15,24 @@ export class StateHandler {
     peers: Peer[] = [];
     jobs: Job[] = [];
 
-    syncState(data: SyncBody) {
+    syncState(data: StateSerializedForSync) {
         this.updateTime = data.u;
         this.timeDiff = data.t - Date.now();
         this.myHost = data.r;
 
         this.peers.splice(0, this.peers.length);
-        this.peers.push(...data.p.map(peer => new Peer(peer.host, peer.status)));
+        this.peers.push(...data.p.map(peer => new Peer(peer.h, peer.s)));
         this.getPeer(this.myHost).status = PeerStatus.ONLINE;
         this.getUnknownAndDesyncPeers().forEach(peer => peer.updateStatus(this.version, this.updateTime));
 
         for (let i = 0; i < this.jobs.length; i++) {
             const job: Job = this.jobs[i];
-            const newJobSerialized: JobSerialized = getFromArrayById(data.j, job.id);
+            const newJobSerialized: JobSerializedForSync = getFromArrayById(data.j, job.id);
             if (newJobSerialized === null) {
                 // jesli nie ma nowego joba z takim id to usun
                 job.clearCurrentJob();
                 this.jobs.splice(i, 1);
-            } else if (!job.equal(newJobSerialized) || job.executions < newJobSerialized.executions) {
+            } else if (!job.equal(newJobSerialized) || job.executions < newJobSerialized.ex) {
                 // jesli jest ale inny to usun i stworz nowego
                 job.clearCurrentJob();
                 this.jobs.splice(i, 1);
@@ -51,15 +42,22 @@ export class StateHandler {
 
         // dodaj brakujace joby
         for (const newJobSerialized of data.j) {
-            const job: Job = getFromArrayById(this.jobs, newJobSerialized.id);
+            const job: Job = getFromArrayById(this.jobs, newJobSerialized.i);
             if (job === null) {
                 this.initNewJob(newJobSerialized);
             }
         }
     }
 
-    getState(): StateSerialized {
-        return { version: this.version, myHost: this.myHost, updateTime: this.updateTime, time: Date.now() + this.timeDiff, peers: this.peers, jobs: this.serializeJobs() };
+    getStateForWeb(): StateSerializedForWeb {
+        return {
+            version: this.version,
+            myHost: this.myHost,
+            updateTime: this.updateTime,
+            serverTime: Date.now() + this.timeDiff,
+            peers: this.peers.map(peer => peer.serializeForWeb()),
+            jobs: this.serializeJobsForWeb()
+        };
     }
 
     async heartbeat() {
@@ -68,14 +66,26 @@ export class StateHandler {
         // Logger.log('Peers after checking');
         // Logger.log(this.peers);
 
-        const syncData: SyncBody = { p: this.peers, j: this.serializeJobs(), u: this.updateTime, t: Date.now() + this.timeDiff, r: null };
+        const syncData: StateSerializedForSync = {
+            p: this.peers.map(peer => peer.serializeForSync()),
+            j: this.serializeJobsForSync(),
+            u: this.updateTime,
+            t: Date.now() + this.timeDiff,
+            r: null
+        };
         this.getDesyncPeers().forEach(peer => peer.sync(syncData));
     }
 
     async addPeer(newPeer: Peer, updateTime: number) {
         const newPeers: Peer[] = [...this.peers, newPeer];
         const peersToSend: Peer[] = [...this.getOnlineAndDesyncPeers(), newPeer];
-        const success: boolean = await this.syncPeers(peersToSend, { p: newPeers, j: this.serializeJobs(), u: updateTime, t: Date.now(), r: null });
+        const success: boolean = await this.syncPeers(peersToSend, {
+            p: newPeers.map(peer => peer.serializeForSync()),
+            j: this.serializeJobsForSync(),
+            u: updateTime,
+            t: Date.now(),
+            r: null
+        });
         if (success) {
             if (!this.getPeer(newPeer.host)) {
                 this.peers.push(newPeer);
@@ -89,8 +99,8 @@ export class StateHandler {
     async removePeer(peerToRemove: Peer, updateTime: number) {
         const newPeers: Peer[] = this.peers.filter(peer => peer !== peerToRemove);
         const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers().filter(peer => peer !== peerToRemove), {
-            p: newPeers,
-            j: this.serializeJobs(),
+            p: newPeers.map(peer => peer.serializeForSync()),
+            j: this.serializeJobsForSync(),
             u: updateTime,
             t: Date.now(),
             r: null
@@ -104,11 +114,11 @@ export class StateHandler {
         return success;
     }
 
-    async addJob(data: NewJobBody) {
+    async addJob(data: NewJobRequestBody) {
         const newJob: Job = new Job(this.getNewJobId(), data.endpoint, data.startTime, data.intervalValue, data.intervalUnit);
-        const newJobs: JobSerialized[] = [...this.serializeJobs(), newJob.serialize()];
+        const newJobs: JobSerializedForSync[] = [...this.serializeJobsForSync(), newJob.serializeForSync()];
         const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
-            p: this.peers,
+            p: this.peers.map(peer => peer.serializeForSync()),
             j: newJobs,
             u: data.updateTime,
             t: Date.now(),
@@ -124,9 +134,9 @@ export class StateHandler {
     }
 
     async removeJob(jobToRemove: Job, updateTime: number) {
-        const newJobs: JobSerialized[] = this.jobs.filter(job => job !== jobToRemove).map(job => job.serialize());
+        const newJobs: JobSerializedForSync[] = this.jobs.filter(job => job !== jobToRemove).map(job => job.serializeForSync());
         const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
-            p: this.peers,
+            p: this.peers.map(peer => peer.serializeForSync()),
             j: newJobs,
             u: updateTime,
             t: Date.now(),
@@ -141,8 +151,8 @@ export class StateHandler {
         return success;
     }
 
-    async syncPeers(peers: Peer[], syncData: SyncBody): Promise<boolean> {
-        const responses: SyncResponse[] = await Promise.all(peers.map(peer => peer.sync(syncData)));
+    async syncPeers(peers: Peer[], syncData: StateSerializedForSync): Promise<boolean> {
+        const responses: SyncResult[] = await Promise.all(peers.map(peer => peer.sync(syncData)));
         // return true if at least one other peer responded OK or it wasnt send to any peer
         return responses.some(item => item.success && item.peer.host !== this.myHost) || responses.length === 0;
     }
@@ -185,8 +195,12 @@ export class StateHandler {
         return null;
     }
 
-    serializeJobs() {
-        return this.jobs.map(job => job.serialize());
+    serializeJobsForSync() {
+        return this.jobs.map(job => job.serializeForSync());
+    }
+
+    serializeJobsForWeb() {
+        return this.jobs.map(job => job.serializeForWeb());
     }
 
     getNewJobId() {
@@ -199,15 +213,8 @@ export class StateHandler {
         }
     }
 
-    initNewJob(newJobSerialized: JobSerialized) {
-        const newJob: Job = new Job(
-            newJobSerialized.id,
-            newJobSerialized.endpoint,
-            newJobSerialized.startTime,
-            newJobSerialized.intervalValue,
-            newJobSerialized.intervalUnit,
-            newJobSerialized.executions
-        );
+    initNewJob(newJobSerialized: JobSerializedForSync) {
+        const newJob: Job = new Job(newJobSerialized.i, newJobSerialized.e, newJobSerialized.s, newJobSerialized.iv, newJobSerialized.iu, newJobSerialized.ex);
         let voteTimeout: number = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
         while (voteTimeout < 0) {
             newJob.markDone(1);
@@ -246,7 +253,10 @@ export class StateHandler {
             job.vote();
             job.currentJob.jobTimeout = setTimeout(() => this.getVotes(job), Settings.NEXT_VOTE_DELAY);
         } else {
-            const executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
+            let executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
+            if (executeTime < 0) {
+                executeTime = 0;
+            }
             if (job.currentJob.myVote === winnerVote) {
                 Logger.log('Zwyciestwo');
                 job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job), executeTime);
@@ -269,7 +279,7 @@ export class StateHandler {
         // wyslanie musi byc wczesniej niz zwiekszenie  executions
         // todo przeniesc do innego pliku?
         this.getOnlinePeers().forEach(peer => {
-            makePostRequest(peer.host + Endpoints.JOB_DONE, { id: job.id, exe: job.executions });
+            makePostRequest(peer.host + Endpoints.JOB_DONE, { i: job.id, e: job.executions });
         });
 
         this.handleJobDone(job, 1); // todo moze robic to po poinformowaniu, trzeba podac ktore wykonanie

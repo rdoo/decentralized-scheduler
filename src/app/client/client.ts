@@ -1,8 +1,7 @@
 import { Job } from '../job';
 import { Peer, PeerStatus } from '../peer';
-import { StateSerialized } from '../state-handler';
 import { Endpoints, HTTPMethods, TimeConstants } from '../utils/constants';
-import { NewJobBody, NewRemovePeerBody } from '../utils/models';
+import { NewJobRequestBody, NewOrRemovePeerRequestBody, StateSerializedForWeb } from '../utils/models';
 
 let timeDiff: number = 0;
 
@@ -16,8 +15,8 @@ fetch(window.location.origin + Endpoints.GET_STATE)
     .then(response => response.json())
     .then(data => updateView(data));
 
-function updateView(data: StateSerialized) {
-    timeDiff = data.time - Date.now();
+function updateView(data: StateSerializedForWeb) {
+    timeDiff = data.serverTime - Date.now();
 
     document.getElementById('version').innerText = data.version.toString();
     if (data.updateTime === 0) {
@@ -98,7 +97,7 @@ function createTable(columns: string[], transforms: ((dataCell: HTMLTableDataCel
 }
 
 function addNewPeer(form: HTMLFormElement) {
-    const newPeer: NewRemovePeerBody = { updateTime: Date.now() };
+    const newPeer: NewOrRemovePeerRequestBody = { updateTime: Date.now() };
     new FormData(form).forEach((value, key) => (newPeer[key] = value));
 
     fetch(window.location.origin + Endpoints.ADD_NEW_PEER, {
@@ -130,7 +129,7 @@ function removePeer(peer: Peer) {
 }
 
 function addNewJob(form: HTMLFormElement) {
-    const newJob: NewJobBody = { updateTime: Date.now() };
+    const newJob: NewJobRequestBody = { updateTime: Date.now() };
     new FormData(form).forEach((value, key) => {
         switch (key) {
             case 'startTime':

@@ -1,8 +1,8 @@
 import { Job } from './job';
 import { Endpoints, HTTPCodes, NodeHttpErrors } from './utils/constants';
 import { Logger } from './utils/logger';
-import { HeartbeatResponse, ResponseWrapper, SyncBody, SyncResponse } from './utils/models';
-import { makeGetRequest, makePostRequest } from './utils/requests';
+import { HeartbeatResponse, PeerSerializedForSync, PeerSerializedForWeb, StateSerializedForSync, SyncResult } from './utils/models';
+import { makeGetRequest, makePostRequest, ResponseWrapper } from './utils/requests';
 import { Settings } from './utils/settings';
 
 export const enum PeerStatus {
@@ -51,7 +51,7 @@ export class Peer {
         }
     }
 
-    sync(syncData: SyncBody): Promise<SyncResponse> {
+    sync(syncData: StateSerializedForSync): Promise<SyncResult> {
         Logger.log('Syncing peer', this.host);
         return new Promise(async (resolve, reject) => {
             setTimeout(() => {
@@ -81,6 +81,14 @@ export class Peer {
     }
 
     getVoteForJob(job: Job) {
-        return makePostRequest(this.host + Endpoints.JOB_VOTE, { id: job.id, exe: job.executions });
+        return makePostRequest(this.host + Endpoints.JOB_VOTE, { i: job.id, e: job.executions });
+    }
+
+    serializeForSync(): PeerSerializedForSync {
+        return { h: this.host, s: this.status };
+    }
+
+    serializeForWeb(): PeerSerializedForWeb {
+        return { host: this.host, status: this.status };
     }
 }

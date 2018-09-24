@@ -2,7 +2,11 @@ import { ClientRequest, request, RequestOptions } from 'http';
 import { parse } from 'url';
 
 import { HTTPMethods } from './constants';
-import { ResponseWrapper } from './models';
+
+export interface ResponseWrapper {
+    code: number;
+    data: string;
+}
 
 export function makeGetRequest(url: string): Promise<ResponseWrapper> {
     return makeRequest(HTTPMethods.GET, url);

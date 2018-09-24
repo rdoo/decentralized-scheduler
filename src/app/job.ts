@@ -1,15 +1,6 @@
 import { IntervalUnit, TimeConstants } from './utils/constants';
 import { randomInteger } from './utils/helpers';
-
-export interface JobSerialized {
-    id: number;
-    endpoint: string;
-    startTime: number;
-    intervalValue: number;
-    intervalUnit: IntervalUnit;
-    executions?: number;
-    nextExecute?: number;
-}
+import { JobSerializedForSync, JobSerializedForWeb } from './utils/models';
 
 export interface CurrentJob {
     jobTimeout?: any;
@@ -97,20 +88,25 @@ export class Job {
         return winnerVote;
     }
 
-    equal(job: JobSerialized) {
-        if (
-            this.id === job.id &&
-            this.endpoint === job.endpoint &&
-            this.startTime === job.startTime &&
-            this.intervalValue === job.intervalValue &&
-            this.intervalUnit === job.intervalUnit
-        ) {
+    equal(job: JobSerializedForSync) {
+        if (this.id === job.i && this.endpoint === job.e && this.startTime === job.s && this.intervalValue === job.iv && this.intervalUnit === job.iu) {
             return true;
         }
         return false;
     }
 
-    serialize(): JobSerialized {
+    serializeForSync(): JobSerializedForSync {
+        return {
+            i: this.id,
+            e: this.endpoint,
+            s: this.startTime,
+            iv: this.intervalValue,
+            iu: this.intervalUnit,
+            ex: this.executions
+        };
+    }
+
+    serializeForWeb(): JobSerializedForWeb {
         return {
             id: this.id,
             endpoint: this.endpoint,
