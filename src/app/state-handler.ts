@@ -114,20 +114,19 @@ export class StateHandler {
         return success;
     }
 
-    async addJob(data: NewJobRequestBody) {
-        const newJob: Job = new Job(this.getNewJobId(), data.endpoint, data.startTime, data.intervalValue, data.intervalUnit);
+    async addJob(newJob: Job, updateTime: number) {
         const newJobs: JobSerializedForSync[] = [...this.serializeJobsForSync(), newJob.serializeForSync()];
         const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
             p: this.peers.map(peer => peer.serializeForSync()),
             j: newJobs,
-            u: data.updateTime,
+            u: updateTime,
             t: Date.now(),
             r: null
         });
         if (success) {
             this.jobs.push(newJob);
             newJob.currentJob.jobTimeout = setTimeout(() => this.getVotes(newJob), newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME);
-            this.updateTime = data.updateTime;
+            this.updateTime = updateTime;
             this.timeDiff = 0;
         }
         return success;

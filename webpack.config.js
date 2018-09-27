@@ -2,6 +2,8 @@ const webpack = require('webpack');
 const path = require('path');
 const fs = require('fs');
 
+const cssnano = require('cssnano');
+
 const RunNodeWebpackPlugin = require('run-node-webpack-plugin');
 
 const nodeModules = {};
@@ -32,7 +34,7 @@ module.exports = (env, argv) => {
         entry: path.join(__dirname, 'src', 'index.ts'),
         output: {
             path: path.join(__dirname, 'build'),
-            filename: 'bundle.js'
+            filename: 'index.js'
         },
         resolve: {
             extensions: ['.ts']
@@ -41,8 +43,8 @@ module.exports = (env, argv) => {
             rules: [
                 { test: /client.ts$/, use: [{ loader: 'raw-loader' }, { loader: 'uglify-es-loader' }] },
                 { test: /\.ts$/, use: [{ loader: 'awesome-typescript-loader' }] },
-                { test: /\.css$/, use: [{ loader: 'raw-loader' }] },
-                { test: /\.html$/, use: [{ loader: 'html-loader', options: { interpolate: 'require', minimize: true, removeComments: false, minifyCSS: true } }] }
+                { test: /\.css$/, use: [{ loader: 'raw-loader' }, { loader: 'postcss-loader', options: { plugins: loader => [cssnano()] } }] },
+                { test: /\.html$/, use: [{ loader: 'html-loader', options: { interpolate: 'require', minimize: true, removeComments: false, conservativeCollapse: false } }] }
             ]
         },
         plugins: webpackPlugins

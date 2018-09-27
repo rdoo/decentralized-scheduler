@@ -23,11 +23,11 @@ export class ServerApp {
 
         this.server = createServer((request, response) => {
             const url: string = request.url;
-            let body: string = '';
+            let bodyString: string = '';
 
             if (request.method === HTTPMethods.POST) {
                 request.on('data', data => {
-                    body += data;
+                    bodyString += data;
                 });
             }
 
@@ -38,8 +38,8 @@ export class ServerApp {
                     break;
                 case Endpoints.JOB_VOTE:
                     request.on('end', () => {
-                        const bodyData: VoteOrDoneRequestBody = JSON.parse(body);
-                        const vote: number = this.stateHandler.getJobVote(bodyData.i, bodyData.e);
+                        const body: VoteOrDoneRequestBody = JSON.parse(bodyString);
+                        const vote: number = this.stateHandler.getJobVote(body.i, body.e);
                         if (vote) {
                             response.writeHead(HTTPCodes.OK);
                             response.end(JSON.stringify(vote));
@@ -51,8 +51,8 @@ export class ServerApp {
                     break;
                 case Endpoints.JOB_DONE:
                     request.on('end', () => {
-                        const bodyData: VoteOrDoneRequestBody = JSON.parse(body);
-                        const success: boolean = this.stateHandler.getJobDone(bodyData.i, bodyData.e);
+                        const body: VoteOrDoneRequestBody = JSON.parse(bodyString);
+                        const success: boolean = this.stateHandler.getJobDone(body.i, body.e);
                         if (success) {
                             response.writeHead(HTTPCodes.OK);
                             response.end();
@@ -64,9 +64,9 @@ export class ServerApp {
                     break;
                 case Endpoints.SYNC_STATE:
                     request.on('end', () => {
-                        Logger.log('Getting sync', body);
-                        const bodyData: StateSerializedForSync = JSON.parse(body);
-                        this.stateHandler.syncState(bodyData);
+                        Logger.log('Getting sync', bodyString);
+                        const body: StateSerializedForSync = JSON.parse(bodyString);
+                        this.stateHandler.syncState(body);
                         response.writeHead(HTTPCodes.OK);
                         response.end();
                     });
@@ -81,15 +81,15 @@ export class ServerApp {
                     break;
                 case Endpoints.ADD_NEW_PEER:
                     request.on('end', async () => {
-                        const bodyData: NewOrRemovePeerRequestBody = JSON.parse(body);
-                        bodyData.host = formatHost(bodyData.host);
-                        if (this.stateHandler.getPeer(bodyData.host)) {
+                        const body: NewOrRemovePeerRequestBody = JSON.parse(bodyString);
+                        body.host = formatHost(body.host);
+                        if (this.stateHandler.getPeer(body.host)) {
                             response.writeHead(HTTPCodes.BAD_REQUEST);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
                             return;
                         }
-                        const newPeer: Peer = new Peer(bodyData.host);
-                        const success: boolean = await this.stateHandler.addPeer(newPeer, bodyData.updateTime);
+                        const newPeer: Peer = new Peer(body.host);
+                        const success: boolean = await this.stateHandler.addPeer(newPeer, body.updateTime);
                         if (success) {
                             response.writeHead(HTTPCodes.OK);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
@@ -101,14 +101,14 @@ export class ServerApp {
                     break;
                 case Endpoints.REMOVE_PEER:
                     request.on('end', async () => {
-                        const bodyData: NewOrRemovePeerRequestBody = JSON.parse(body);
-                        const peerToRemove: Peer = this.stateHandler.getPeer(bodyData.host);
+                        const body: NewOrRemovePeerRequestBody = JSON.parse(bodyString);
+                        const peerToRemove: Peer = this.stateHandler.getPeer(body.host);
                         if (!peerToRemove) {
                             response.writeHead(HTTPCodes.BAD_REQUEST);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
                             return;
                         }
-                        const success: boolean = await this.stateHandler.removePeer(peerToRemove, bodyData.updateTime);
+                        const success: boolean = await this.stateHandler.removePeer(peerToRemove, body.updateTime);
                         if (success) {
                             response.writeHead(HTTPCodes.OK);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
@@ -120,8 +120,9 @@ export class ServerApp {
                     break;
                 case Endpoints.ADD_NEW_JOB:
                     request.on('end', async () => {
-                        const bodyData: NewJobRequestBody = JSON.parse(body);
-                        const success: boolean = await this.stateHandler.addJob(bodyData);
+                        const body: NewJobRequestBody = JSON.parse(bodyString);
+                        const newJob: Job = new Job(this.stateHandler.getNewJobId(), body.endpoint, body.startTime, body.intervalValue, body.intervalUnit);
+                        const success: boolean = await this.stateHandler.addJob(newJob, body.updateTime);
                         if (success) {
                             response.writeHead(HTTPCodes.OK);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
@@ -133,14 +134,14 @@ export class ServerApp {
                     break;
                 case Endpoints.REMOVE_JOB:
                     request.on('end', async () => {
-                        const bodyData: RemoveJobRequestBody = JSON.parse(body);
-                        const jobToRemove: Job = this.stateHandler.getJob(bodyData.id);
+                        const body: RemoveJobRequestBody = JSON.parse(bodyString);
+                        const jobToRemove: Job = this.stateHandler.getJob(body.id);
                         if (!jobToRemove) {
                             response.writeHead(HTTPCodes.BAD_REQUEST);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
                             return;
                         }
-                        const success: boolean = await this.stateHandler.removeJob(jobToRemove, bodyData.updateTime);
+                        const success: boolean = await this.stateHandler.removeJob(jobToRemove, body.updateTime);
                         if (success) {
                             response.writeHead(HTTPCodes.OK);
                             response.end(JSON.stringify(this.stateHandler.getStateForWeb()));

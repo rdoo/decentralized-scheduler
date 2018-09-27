@@ -183,8 +183,8 @@ function getStatusName(status: PeerStatus) {
             return 'Offline';
         case PeerStatus.UNKNOWN:
             return 'Unknown';
-        case PeerStatus.OLD_VERSION:
-            return 'Old version';
+        case PeerStatus.OTHER_VERSION:
+            return 'Other version';
         case PeerStatus.DESYNC:
             return 'Desync';
     }

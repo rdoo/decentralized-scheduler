@@ -9,7 +9,7 @@ export const enum PeerStatus {
     ONLINE,
     OFFLINE,
     UNKNOWN,
-    OLD_VERSION,
+    OTHER_VERSION,
     DESYNC
 }
 
@@ -26,11 +26,14 @@ export class Peer {
         try {
             const responseData: ResponseWrapper = await makeGetRequest(this.host + Endpoints.HEARTBEAT);
             if (responseData.code === HTTPCodes.OK) {
-                const data: HeartbeatResponse = JSON.parse(responseData.data); // todo try catch
-                if (data.v !== undefined && data.v !== currentVersion) {
-                    this.status = PeerStatus.OLD_VERSION;
+                const data: HeartbeatResponse = JSON.parse(responseData.data);
+                if (data.v === undefined || data.u === undefined) {
+                    this.status = PeerStatus.UNKNOWN;
                     return;
-                } else if (data.u !== undefined && data.u < currentUpdateTime) {
+                } else if (data.v !== currentVersion) {
+                    this.status = PeerStatus.OTHER_VERSION;
+                    return;
+                } else if (data.u < currentUpdateTime) {
                     this.status = PeerStatus.DESYNC;
                     return;
                 }
