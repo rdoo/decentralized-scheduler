@@ -1,4 +1,4 @@
-import { IntervalUnit, TimeConstants } from './utils/constants';
+import { IntervalUnits, TimeConstants } from './utils/constants';
 import { randomInteger } from './utils/helpers';
 import { JobSerializedForSync, JobSerializedForWeb } from './utils/models';
 
@@ -14,12 +14,12 @@ export class Job {
     endpoint: string;
     startTime: number;
     intervalValue: number;
-    intervalUnit: IntervalUnit;
+    intervalUnit: IntervalUnits;
     executions: number;
     nextExecute: number;
     currentJob: CurrentJob;
 
-    constructor(id: number, endpoint: string, startTime: number, intervalValue: number, intervalUnit: IntervalUnit, executions: number = 0) {
+    constructor(id: number, endpoint: string, startTime: number, intervalValue: number, intervalUnit: IntervalUnits, executions: number = 0) {
         this.id = id;
         this.endpoint = endpoint;
         this.startTime = startTime;
@@ -33,16 +33,16 @@ export class Job {
     calculateExecuteTime() {
         let value: number = this.intervalValue * (this.executions + 1);
         switch (this.intervalUnit) {
-            case IntervalUnit.MINUTE:
+            case IntervalUnits.MINUTE:
                 value *= TimeConstants.MINUTE;
                 break;
-            case IntervalUnit.HOUR:
+            case IntervalUnits.HOUR:
                 value *= TimeConstants.HOUR;
                 break;
-            case IntervalUnit.DAY:
+            case IntervalUnits.DAY:
                 value *= TimeConstants.DAY;
                 break;
-            case IntervalUnit.MONTH:
+            case IntervalUnits.MONTH:
                 value *= TimeConstants.MONTH;
                 break;
         }
@@ -74,10 +74,6 @@ export class Job {
     }
 
     getWinnerVote() {
-        if (this.currentJob.votes.length < 2) {
-            return null;
-        }
-
         const winnerVote: number = Math.max(...this.currentJob.votes);
 
         const numberOfWinners: number = this.currentJob.votes.filter(vote => vote === winnerVote).length;

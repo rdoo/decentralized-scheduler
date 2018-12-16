@@ -8,5 +8,5 @@ export class Settings {
     static VOTING_WINDOW: number = 20 * TimeConstants.SECOND;
     static EXECUTE_WINDOW: number = 20 * TimeConstants.SECOND;
     static NEXT_VOTE_DELAY: number = 10 * TimeConstants.SECOND;
-    static JOB_TRIES_UNTIL_TERMINATE: number = 5;
+    static JOB_TRIES_UNTIL_TERMINATE: number = 3;
 }

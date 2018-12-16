@@ -7,7 +7,7 @@ import { StateHandler } from './state-handler';
 import { Endpoints, HTTPCodes, HTTPMethods } from './utils/constants';
 import { formatHost } from './utils/helpers';
 import { Logger } from './utils/logger';
-import { NewJobRequestBody, NewOrRemovePeerRequestBody, RemoveJobRequestBody, StateSerializedForSync, VoteOrDoneRequestBody } from './utils/models';
+import { NewJobRequestBody, NewOrRemovePeerRequestBody, RemoveJobRequestBody, StateSerializedForSync, ToggleModeRequestBody, VoteOrDoneRequestBody } from './utils/models';
 import { Settings } from './utils/settings';
 
 let html: string = require('./client/client.html');
@@ -32,12 +32,20 @@ export class ServerApp {
             }
 
             switch (url) {
+                // requests from other peers:
                 case Endpoints.HEARTBEAT:
                     response.writeHead(HTTPCodes.OK);
                     response.end(JSON.stringify({ v: this.stateHandler.version, u: this.stateHandler.updateTime }));
                     break;
+                case Endpoints.FORCE_DEATH:
+                    Logger.log('Turning off', bodyString);
+                    response.writeHead(HTTPCodes.OK);
+                    response.end();
+                    process.exit();
+                    break;
                 case Endpoints.JOB_VOTE:
                     request.on('end', () => {
+                        Logger.log('Rec req for job vote', bodyString);
                         const body: VoteOrDoneRequestBody = JSON.parse(bodyString);
                         const vote: number = this.stateHandler.getJobVote(body.i, body.e);
                         if (vote) {
@@ -51,6 +59,7 @@ export class ServerApp {
                     break;
                 case Endpoints.JOB_DONE:
                     request.on('end', () => {
+                        Logger.log('Rec req set job done', bodyString);
                         const body: VoteOrDoneRequestBody = JSON.parse(bodyString);
                         const success: boolean = this.stateHandler.getJobDone(body.i, body.e);
                         if (success) {
@@ -64,13 +73,14 @@ export class ServerApp {
                     break;
                 case Endpoints.SYNC_STATE:
                     request.on('end', () => {
-                        Logger.log('Getting sync', bodyString);
+                        Logger.log('Rec sync state from peers', bodyString);
                         const body: StateSerializedForSync = JSON.parse(bodyString);
                         this.stateHandler.syncState(body);
                         response.writeHead(HTTPCodes.OK);
                         response.end();
                     });
                     break;
+                // requests from web:
                 case Endpoints.INDEX:
                     response.writeHead(HTTPCodes.OK, { 'Content-Type': 'text/html' });
                     response.end(html);
@@ -151,10 +161,13 @@ export class ServerApp {
                         }
                     });
                     break;
-                case Endpoints.FORCE_DEATH:
-                    response.writeHead(HTTPCodes.OK);
-                    response.end();
-                    process.exit();
+                case Endpoints.TOGGLE_MODE:
+                    request.on('end', async () => {
+                        const body: ToggleModeRequestBody = JSON.parse(bodyString);
+                        this.stateHandler.singleMode = body.singleMode;
+                        response.writeHead(HTTPCodes.OK);
+                        response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
+                    });
                     break;
                 default:
                     Logger.log(url);

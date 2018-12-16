@@ -4,6 +4,7 @@ import { Endpoints, HTTPMethods, TimeConstants } from '../utils/constants';
 import { NewJobRequestBody, NewOrRemovePeerRequestBody, StateSerializedForWeb } from '../utils/models';
 
 let timeDiff: number = 0;
+let singleMode: boolean = false;
 
 window.onload = () => {
     const timeElement: HTMLHeadingElement = <HTMLHeadingElement>document.getElementById('time');
@@ -17,7 +18,9 @@ fetch(window.location.origin + Endpoints.GET_STATE)
 
 function updateView(data: StateSerializedForWeb) {
     timeDiff = data.serverTime - Date.now();
+    singleMode = data.singleMode;
 
+    document.getElementById('title').innerText = data.singleMode ? 'Centralized Scheduler' : 'Decentralized Scheduler';
     document.getElementById('version').innerText = data.version.toString();
     if (data.updateTime === 0) {
         document.getElementById('updateTime').innerText = 'No updates or not synced';
@@ -170,6 +173,18 @@ function removeJob(job: Job) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({ id: job.id, updateTime: Date.now() })
+    })
+        .then(response => response.json())
+        .then(data => updateView(data));
+}
+
+function toggleMode() {
+    fetch(window.location.origin + Endpoints.TOGGLE_MODE, {
+        method: HTTPMethods.POST,
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ singleMode: !singleMode })
     })
         .then(response => response.json())
         .then(data => updateView(data));

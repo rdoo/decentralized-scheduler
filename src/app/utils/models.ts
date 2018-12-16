@@ -1,10 +1,11 @@
 import { Peer, PeerStatus } from '../peer';
-import { IntervalUnit } from './constants';
+import { IntervalUnits } from './constants';
 
 // models transmitted from server to web
 export interface StateSerializedForWeb {
     version: number;
     myHost: string;
+    singleMode: boolean;
     updateTime: number;
     serverTime: number;
     peers: PeerSerializedForWeb[];
@@ -21,7 +22,7 @@ export interface JobSerializedForWeb {
     endpoint: string;
     startTime: number;
     intervalValue: number;
-    intervalUnit: IntervalUnit;
+    intervalUnit: IntervalUnits;
     executions: number;
     nextExecute: number;
 }
@@ -39,11 +40,15 @@ export interface NewJobRequestBody extends Updatable {
     endpoint?: string;
     startTime?: number;
     intervalValue?: number;
-    intervalUnit?: IntervalUnit;
+    intervalUnit?: IntervalUnits;
 }
 
 export interface RemoveJobRequestBody extends Updatable {
     id: number;
+}
+
+export interface ToggleModeRequestBody {
+    singleMode: boolean;
 }
 
 // models transmitted between peers
@@ -65,7 +70,7 @@ export interface JobSerializedForSync {
     e: string; // endpoint
     s: number; // startTime
     iv: number; // intervalValue
-    iu: IntervalUnit; // intervalUnit
+    iu: IntervalUnits; // intervalUnit
     ex: number; // executions
 }
 

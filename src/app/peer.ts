@@ -55,7 +55,7 @@ export class Peer {
     }
 
     sync(syncData: StateSerializedForSync): Promise<SyncResult> {
-        Logger.log('Syncing peer', this.host);
+        Logger.log('Sending sync data to peer', this.host);
         return new Promise(async (resolve, reject) => {
             setTimeout(() => {
                 // Logger.error('Timeouted');

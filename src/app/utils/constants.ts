@@ -35,11 +35,12 @@ export const enum Endpoints {
     REMOVE_PEER = '/rp',
     ADD_NEW_JOB = '/aj',
     REMOVE_JOB = '/rj',
+    TOGGLE_MODE = '/tm',
     JOB_VOTE = '/jv',
     JOB_DONE = '/jd'
 }
 
-export const enum IntervalUnit {
+export const enum IntervalUnits {
     MINUTE = 'm',
     HOUR = 'h',
     DAY = 'D',
