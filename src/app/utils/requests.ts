@@ -1,5 +1,6 @@
-import { ClientRequest, request, RequestOptions } from 'http';
-import { parse } from 'url';
+import { ClientRequest, IncomingMessage, request as httpRequest, RequestOptions } from 'http';
+import { request as httpsRequest } from 'https';
+import { parse, UrlWithStringQuery } from 'url';
 
 import { CustomErrors, HTTPMethods } from './constants';
 import { Settings } from './settings';
@@ -21,8 +22,10 @@ export function makeRequest(method: HTTPMethods, url: string, body?: any): Promi
     return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject({ code: CustomErrors.TIMEOUTED }), Settings.REQUEST_TIMEOUT);
 
-        const options: RequestOptions = Object.assign({ method }, parse(url));
-        const req: ClientRequest = request(options, response => {
+        const parsedUrl: UrlWithStringQuery = parse(url);
+        const options: RequestOptions = Object.assign({ method }, parsedUrl);
+
+        function responseHandler(response: IncomingMessage) {
             let data: string = '';
 
             response.on('data', chunk => {
@@ -33,7 +36,16 @@ export function makeRequest(method: HTTPMethods, url: string, body?: any): Promi
                 clearTimeout(timeout);
                 resolve({ code: response.statusCode, data });
             });
-        }).on('error', error => {
+        }
+
+        let req: ClientRequest;
+        if (parsedUrl.protocol === 'http:') {
+            req = httpRequest(options, responseHandler);
+        } else {
+            req = httpsRequest(options, responseHandler);
+        }
+
+        req.on('error', error => {
             clearTimeout(timeout);
             reject(error);
         });
@@ -41,6 +53,7 @@ export function makeRequest(method: HTTPMethods, url: string, body?: any): Promi
         if (method === HTTPMethods.POST && body) {
             req.write(JSON.stringify(body));
         }
+
         req.end();
     });
 }

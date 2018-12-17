@@ -3,7 +3,6 @@ import { IntervalUnits } from './constants';
 
 // models transmitted from server to web
 export interface StateSerializedForWeb {
-    version: number;
     myHost: string;
     singleMode: boolean;
     updateTime: number;
@@ -72,11 +71,6 @@ export interface JobSerializedForSync {
     iv: number; // intervalValue
     iu: IntervalUnits; // intervalUnit
     ex: number; // executions
-}
-
-export interface HeartbeatResponse {
-    v: number; // version
-    u: number; // updateTime
 }
 
 export interface VoteOrDoneRequestBody {

@@ -20,7 +20,6 @@ function updateView(data: StateSerializedForWeb) {
 
     timeDiff = data.serverTime - Date.now();
 
-    document.getElementById('version').innerText = data.version.toString();
     if (data.updateTime === 0) {
         document.getElementById('updateTime').innerText = 'No updates or not synced';
     } else {
@@ -190,8 +189,6 @@ function getStatusName(status: PeerStatus) {
             return 'Offline';
         case PeerStatus.UNKNOWN:
             return 'Unknown';
-        case PeerStatus.OTHER_VERSION:
-            return 'Other version';
         case PeerStatus.DESYNC:
             return 'Desync';
         case PeerStatus.ERRORED:

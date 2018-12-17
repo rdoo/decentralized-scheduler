@@ -35,7 +35,7 @@ export class ServerApp {
                 // requests from other peers:
                 case Endpoints.HEARTBEAT:
                     response.writeHead(HTTPCodes.OK);
-                    response.end(JSON.stringify({ v: this.stateHandler.version, u: this.stateHandler.updateTime }));
+                    response.end(JSON.stringify(this.stateHandler.updateTime));
                     break;
                 case Endpoints.FORCE_DEATH:
                     Logger.log('Turning off', bodyString);

@@ -1,14 +1,13 @@
 import { Job } from './job';
 import { CustomErrors, Endpoints, HTTPCodes, NodeHttpErrors } from './utils/constants';
 import { Logger } from './utils/logger';
-import { HeartbeatResponse, PeerSerializedForSync, PeerSerializedForWeb, StateSerializedForSync, SyncResult } from './utils/models';
+import { PeerSerializedForSync, PeerSerializedForWeb, StateSerializedForSync, SyncResult } from './utils/models';
 import { makeGetRequest, makePostRequest, ResponseWrapper } from './utils/requests';
 
 export const enum PeerStatus {
     ONLINE,
     OFFLINE,
     UNKNOWN,
-    OTHER_VERSION,
     DESYNC,
     ERRORED
 }
@@ -22,16 +21,14 @@ export class Peer {
         this.status = status;
     }
 
-    async heartbeat(currentVersion: number, currentUpdateTime: number) {
+    async heartbeat(currentUpdateTime: number) {
         try {
             const responseData: ResponseWrapper = await makeGetRequest(this.host + Endpoints.HEARTBEAT);
             if (responseData.code === HTTPCodes.OK) {
-                const data: HeartbeatResponse = JSON.parse(responseData.data);
-                if (data.v === undefined || data.u === undefined) {
+                const updateTime: number = parseInt(responseData.data, 10);
+                if (isNaN(updateTime)) {
                     this.status = PeerStatus.ERRORED;
-                } else if (data.v !== currentVersion) {
-                    this.status = PeerStatus.OTHER_VERSION;
-                } else if (data.u < currentUpdateTime) {
+                } else if (updateTime < currentUpdateTime) {
                     this.status = PeerStatus.DESYNC;
                 } else {
                     this.status = PeerStatus.ONLINE;

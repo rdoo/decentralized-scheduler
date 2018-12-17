@@ -9,7 +9,6 @@ import { makeGetRequest } from './utils/requests';
 import { Settings } from './utils/settings';
 
 export class StateHandler {
-    version: number = Settings.VERSION;
     myHost: string = null;
     singleMode: boolean = IS_SINGLE_MODE;
     updateTime: number = 0;
@@ -36,7 +35,7 @@ export class StateHandler {
         this.peers.splice(0, this.peers.length);
         this.peers.push(...data.p.map(peer => new Peer(peer.h, peer.s)));
         this.getPeer(this.myHost).status = PeerStatus.ONLINE;
-        this.getUnknownAndDesyncPeers().forEach(peer => peer.heartbeat(this.version, this.updateTime));
+        this.getUnknownAndDesyncPeers().forEach(peer => peer.heartbeat(this.updateTime));
 
         // jobs
         for (let i = 0; i < this.jobs.length; i++) {
@@ -69,7 +68,6 @@ export class StateHandler {
 
     getStateForWeb(): StateSerializedForWeb {
         return {
-            version: this.version,
             myHost: this.myHost,
             singleMode: this.singleMode,
             updateTime: this.updateTime,
@@ -80,7 +78,7 @@ export class StateHandler {
     }
 
     async heartbeat() {
-        await Promise.all(this.getOtherPeers().map(peer => peer.heartbeat(this.version, this.updateTime)));
+        await Promise.all(this.getOtherPeers().map(peer => peer.heartbeat(this.updateTime)));
         this.syncDesyncPeersWithExistingData();
     }
 
@@ -291,15 +289,16 @@ export class StateHandler {
             if (executeTime < 0) {
                 executeTime = 0;
             }
+
             if (job.currentJob.myVote === winnerVote) {
                 Logger.log('Victory');
-
                 if (job.currentJob.votes.length > 1) {
                     job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job), executeTime);
                 } else {
                     job.currentJob.jobTimeout = setTimeout(() => this.checkIfExecuted(job, job.executions), executeTime + Settings.EXECUTE_WINDOW);
                 }
             } else {
+                Logger.log('Defeat');
                 job.currentJob.jobTimeout = setTimeout(() => this.checkIfExecuted(job, job.executions), executeTime + Settings.EXECUTE_WINDOW);
             }
         }
