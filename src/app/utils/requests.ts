@@ -1,7 +1,8 @@
 import { ClientRequest, request, RequestOptions } from 'http';
 import { parse } from 'url';
 
-import { HTTPMethods } from './constants';
+import { CustomErrors, HTTPMethods } from './constants';
+import { Settings } from './settings';
 
 export interface ResponseWrapper {
     code: number;
@@ -18,6 +19,8 @@ export function makePostRequest(url: string, body?: any): Promise<ResponseWrappe
 
 export function makeRequest(method: HTTPMethods, url: string, body?: any): Promise<ResponseWrapper> {
     return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject({ code: CustomErrors.TIMEOUTED }), Settings.REQUEST_TIMEOUT);
+
         const options: RequestOptions = Object.assign({ method }, parse(url));
         const req: ClientRequest = request(options, response => {
             let data: string = '';
@@ -27,9 +30,11 @@ export function makeRequest(method: HTTPMethods, url: string, body?: any): Promi
             });
 
             response.on('end', () => {
+                clearTimeout(timeout);
                 resolve({ code: response.statusCode, data });
             });
-        }).on('error', (error: any) => {
+        }).on('error', error => {
+            clearTimeout(timeout);
             reject(error);
         });
 

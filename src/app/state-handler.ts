@@ -1,10 +1,9 @@
 import { CurrentJob, Job } from './job';
 import { Peer, PeerStatus } from './peer';
-import { Endpoints } from './utils/constants';
 import { getFromArrayById } from './utils/helpers';
 import { Logger } from './utils/logger';
 import { JobSerializedForSync, StateSerializedForSync, StateSerializedForWeb, SyncResult } from './utils/models';
-import { makeGetRequest, makePostRequest, ResponseWrapper } from './utils/requests';
+import { makeGetRequest } from './utils/requests';
 import { Settings } from './utils/settings';
 
 export class StateHandler {
@@ -17,15 +16,21 @@ export class StateHandler {
     jobs: Job[] = [];
 
     syncState(data: StateSerializedForSync) {
+        if (data.u < this.updateTime) {
+            return; // dont allow to overwrite from older state
+        }
+
         this.updateTime = data.u;
         this.timeDiff = data.t - Date.now();
         this.myHost = data.r;
 
+        // peers
         this.peers.splice(0, this.peers.length);
         this.peers.push(...data.p.map(peer => new Peer(peer.h, peer.s)));
         this.getPeer(this.myHost).status = PeerStatus.ONLINE;
-        this.getUnknownAndDesyncPeers().forEach(peer => peer.updateStatus(this.version, this.updateTime));
+        this.getUnknownAndDesyncPeers().forEach(peer => peer.heartbeat(this.version, this.updateTime));
 
+        // jobs
         for (let i = 0; i < this.jobs.length; i++) {
             const job: Job = this.jobs[i];
             const newJobSerialized: JobSerializedForSync = getFromArrayById(data.j, job.id);
@@ -67,28 +72,21 @@ export class StateHandler {
     }
 
     async heartbeat() {
-        await Promise.all(this.getOtherPeers().map(peer => peer.updateStatus(this.version, this.updateTime)));
-
-        const syncData: StateSerializedForSync = {
-            p: this.peers.map(peer => peer.serializeForSync()),
-            j: this.serializeJobsForSync(),
-            u: this.updateTime,
-            t: Date.now() + this.timeDiff,
-            r: null
-        };
-        this.getDesyncPeers().forEach(peer => peer.sync(syncData));
+        await Promise.all(this.getOtherPeers().map(peer => peer.heartbeat(this.version, this.updateTime)));
+        this.syncDesyncPeersWithExistingData();
     }
 
     async addPeer(newPeer: Peer, updateTime: number) {
         const newPeers: Peer[] = [...this.peers, newPeer];
         const peersToSend: Peer[] = [...this.getOnlineAndDesyncPeers(), newPeer];
-        const success: boolean = await this.syncPeers(peersToSend, {
+        const success: boolean = await this.syncAllPeersWithNewData(peersToSend, {
             p: newPeers.map(peer => peer.serializeForSync()),
             j: this.serializeJobsForSync(),
             u: updateTime,
             t: Date.now(),
             r: null
         });
+
         if (success) {
             if (!this.getPeer(newPeer.host)) {
                 this.peers.push(newPeer);
@@ -101,15 +99,16 @@ export class StateHandler {
 
     async removePeer(peerToRemove: Peer, updateTime: number) {
         const newPeers: Peer[] = this.peers.filter(peer => peer !== peerToRemove);
-        const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers().filter(peer => peer !== peerToRemove), {
+        const success: boolean = await this.syncAllPeersWithNewData(this.getOnlineAndDesyncPeers().filter(peer => peer !== peerToRemove), {
             p: newPeers.map(peer => peer.serializeForSync()),
             j: this.serializeJobsForSync(),
             u: updateTime,
             t: Date.now(),
             r: null
         });
+
         if (success) {
-            peerToRemove.kill(); // todo co jesli sie nie uda?
+            peerToRemove.kill();
             this.peers.splice(this.peers.indexOf(peerToRemove), 1);
             this.updateTime = updateTime;
             this.timeDiff = 0;
@@ -119,7 +118,7 @@ export class StateHandler {
 
     async addJob(newJob: Job, updateTime: number) {
         const newJobs: JobSerializedForSync[] = [...this.serializeJobsForSync(), newJob.serializeForSync()];
-        const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
+        const success: boolean = await this.syncAllPeersWithNewData(this.getOnlineAndDesyncPeers(), {
             p: this.peers.map(peer => peer.serializeForSync()),
             j: newJobs,
             u: updateTime,
@@ -137,13 +136,14 @@ export class StateHandler {
 
     async removeJob(jobToRemove: Job, updateTime: number) {
         const newJobs: JobSerializedForSync[] = this.jobs.filter(job => job !== jobToRemove).map(job => job.serializeForSync());
-        const success: boolean = await this.syncPeers(this.getOnlineAndDesyncPeers(), {
+        const success: boolean = await this.syncAllPeersWithNewData(this.getOnlineAndDesyncPeers(), {
             p: this.peers.map(peer => peer.serializeForSync()),
             j: newJobs,
             u: updateTime,
             t: Date.now(),
             r: null
         });
+
         if (success) {
             jobToRemove.clearCurrentJob();
             this.jobs.splice(this.jobs.indexOf(jobToRemove), 1);
@@ -153,10 +153,22 @@ export class StateHandler {
         return success;
     }
 
-    async syncPeers(peers: Peer[], syncData: StateSerializedForSync): Promise<boolean> {
+    async syncAllPeersWithNewData(peers: Peer[], syncData: StateSerializedForSync): Promise<boolean> {
         const responses: SyncResult[] = await Promise.all(peers.map(peer => peer.sync(syncData)));
         // return true if at least one other peer responded OK or it wasnt send to any peer
         return responses.some(item => item.success && item.peer.host !== this.myHost) || responses.length === 0;
+    }
+
+    syncDesyncPeersWithExistingData() {
+        const syncData: StateSerializedForSync = {
+            p: this.peers.map(peer => peer.serializeForSync()),
+            j: this.serializeJobsForSync(),
+            u: this.updateTime,
+            t: Date.now() + this.timeDiff,
+            r: null
+        };
+
+        this.getDesyncPeers().forEach(peer => peer.sync(syncData));
     }
 
     getPeer(host: string) {
@@ -217,10 +229,12 @@ export class StateHandler {
 
     initNewJob(newJob: Job) {
         let voteTimeout: number = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
+
         while (voteTimeout < 0) {
             newJob.markDone(1);
             voteTimeout = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
         }
+
         Logger.log('Initiating job', newJob.endpoint, 'with vote timeout', voteTimeout);
         newJob.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(newJob), voteTimeout);
         this.jobs.push(newJob);
@@ -232,29 +246,30 @@ export class StateHandler {
 
         job.currentJob.jobTimeout = setTimeout(() => this.chooseWinner(job), Settings.VOTING_WINDOW);
 
-        const data: ResponseWrapper[] = await Promise.all(this.getOnlinePeers().map(peer => peer.getVoteForJob(job).catch(error => error)));
-        for (const item of data) {
-            const vote: number = parseInt(item.data, 10);
-            if (!isNaN(vote)) {
+        const votes: number[] = await Promise.all(this.getOnlinePeers().map(peer => peer.getVoteForJob(job)));
+        for (const vote of votes) {
+            if (vote !== null) {
                 job.currentJob.votes.push(vote);
             }
         }
+
+        this.syncDesyncPeersWithExistingData();
     }
 
     chooseWinner(job: Job) {
-        Logger.log('Lista votow', job.endpoint, job.currentJob.votes);
+        Logger.log('List of votes:', job.endpoint, job.currentJob.votes);
         const winnerVote: number = job.getWinnerVote();
         if (winnerVote === null) {
             Logger.log('Multiple max votes');
             job.vote();
-            job.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), Settings.NEXT_VOTE_DELAY);
+            job.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), Settings.EXTRA_VOTE_DELAY);
         } else {
             let executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
             if (executeTime < 0) {
                 executeTime = 0;
             }
             if (job.currentJob.myVote === winnerVote) {
-                Logger.log('Zwyciestwo');
+                Logger.log('Victory');
 
                 if (job.currentJob.tries > Settings.JOB_TRIES_UNTIL_TERMINATE) {
                     Logger.log('Terminating job', job.endpoint);
@@ -289,26 +304,23 @@ export class StateHandler {
     }
 
     checkIfExecuted(job: Job, executions: number) {
-        Logger.log('Check execution', job.endpoint);
+        Logger.log('Checking execution', job.endpoint);
         const currentJob: CurrentJob = job.currentJob;
         if (job.executions === executions + 1) {
             Logger.log('Job was executed');
         } else {
             Logger.log('Trying once again', job.currentJob.tries + 1);
             job.vote();
-            currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), Settings.NEXT_VOTE_DELAY);
+            currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), Settings.EXTRA_VOTE_DELAY);
         }
     }
 
     handleJobDone(job: Job) {
         const executions = job.executions; // local variable for copying executions value
-
         this.handleLocalJobDone(job, 1);
+        this.getOnlinePeers().forEach(peer => peer.informJobDone(job, executions));
 
-        // todo przeniesc do innego pliku?
-        this.getOnlinePeers().forEach(peer => {
-            makePostRequest(peer.host + Endpoints.JOB_DONE, { i: job.id, e: executions });
-        });
+        this.syncDesyncPeersWithExistingData();
     }
 
     handleLocalJobDone(job: Job, timesDone: number) {
@@ -323,11 +335,11 @@ export class StateHandler {
             if (job.executions === executions) {
                 return job.currentJob.myVote;
             } else if (job.executions < executions) {
-                this.handleLocalJobDone(job, executions - job.executions); // todo przemyslec
+                this.handleLocalJobDone(job, executions - job.executions);
                 return job.currentJob.myVote;
             }
         }
-        return null;
+        return -1;
     }
 
     getJobDone(id: number, executions: number): boolean {
@@ -337,7 +349,7 @@ export class StateHandler {
                 this.handleLocalJobDone(job, 1);
                 return true;
             } else if (job.executions < executions) {
-                this.handleLocalJobDone(job, executions - job.executions + 1); // todo przemyslec +1
+                this.handleLocalJobDone(job, executions - job.executions + 1);
                 return true;
             }
         }

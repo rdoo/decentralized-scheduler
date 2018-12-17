@@ -3,6 +3,8 @@
     "target": "es2015",
     "module": "es2015",
     "moduleResolution": "node",
-    "lib": ["esnext", "dom"]
+    "lib": ["esnext", "dom"],
+    "noImplicitAny": true,
+    "suppressImplicitAnyIndexErrors": true
   }
 }

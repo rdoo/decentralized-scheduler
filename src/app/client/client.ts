@@ -202,6 +202,8 @@ function getStatusName(status: PeerStatus) {
             return 'Other version';
         case PeerStatus.DESYNC:
             return 'Desync';
+        case PeerStatus.ERRORED:
+            return 'Errored';
     }
     return '';
 }

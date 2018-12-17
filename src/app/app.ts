@@ -48,12 +48,12 @@ export class ServerApp {
                         Logger.log('Rec req for job vote', bodyString);
                         const body: VoteOrDoneRequestBody = JSON.parse(bodyString);
                         const vote: number = this.stateHandler.getJobVote(body.i, body.e);
-                        if (vote) {
+                        if (vote === -1) {
+                            response.writeHead(HTTPCodes.NOT_IMPLEMENTED);
+                            response.end();
+                        } else {
                             response.writeHead(HTTPCodes.OK);
                             response.end(JSON.stringify(vote));
-                        } else {
-                            response.writeHead(HTTPCodes.INTERNAL_SERVER_ERROR);
-                            response.end();
                         }
                     });
                     break;
@@ -66,7 +66,7 @@ export class ServerApp {
                             response.writeHead(HTTPCodes.OK);
                             response.end();
                         } else {
-                            response.writeHead(HTTPCodes.INTERNAL_SERVER_ERROR);
+                            response.writeHead(HTTPCodes.NOT_IMPLEMENTED);
                             response.end();
                         }
                     });
