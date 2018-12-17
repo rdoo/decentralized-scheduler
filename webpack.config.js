@@ -13,10 +13,12 @@ fs.readdirSync('node_modules')
 
 module.exports = (env, argv) => {
     const IS_PRODUCTION_BUILD = argv.mode === 'production';
+    const IS_SINGLE_MODE = env !== undefined && env.single === true;
 
     const webpackPlugins = [
         new webpack.DefinePlugin({
-            IS_PRODUCTION_BUILD
+            IS_PRODUCTION_BUILD,
+            IS_SINGLE_MODE
         })
     ];
 

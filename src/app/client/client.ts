@@ -4,7 +4,6 @@ import { Endpoints, HTTPMethods, TimeConstants } from '../utils/constants';
 import { NewJobRequestBody, NewOrRemovePeerRequestBody, StateSerializedForWeb } from '../utils/models';
 
 let timeDiff: number = 0;
-let singleMode: boolean = false;
 
 window.onload = () => {
     const timeElement: HTMLHeadingElement = <HTMLHeadingElement>document.getElementById('time');
@@ -17,10 +16,10 @@ fetch(window.location.origin + Endpoints.GET_STATE)
     .then(data => updateView(data));
 
 function updateView(data: StateSerializedForWeb) {
-    timeDiff = data.serverTime - Date.now();
-    singleMode = data.singleMode;
+    document.body.style.display = 'block';
 
-    document.getElementById('title').innerText = data.singleMode ? 'Centralized Scheduler' : 'Decentralized Scheduler';
+    timeDiff = data.serverTime - Date.now();
+
     document.getElementById('version').innerText = data.version.toString();
     if (data.updateTime === 0) {
         document.getElementById('updateTime').innerText = 'No updates or not synced';
@@ -28,27 +27,32 @@ function updateView(data: StateSerializedForWeb) {
         document.getElementById('updateTime').innerText = new Date(data.updateTime).toLocaleString();
     }
 
-    const peersElement: HTMLDivElement = <HTMLDivElement>document.getElementById('peers');
-    peersElement.innerHTML = '';
-    if (data.peers.length === 0) {
-        peersElement.appendChild(createTable([], [(dataCell: HTMLTableDataCellElement, item: Peer) => (dataCell.innerText = 'No peers added or not synced')], [1]));
+    if (data.singleMode) {
+        document.getElementById('title').innerText = 'Centralized Scheduler';
+        document.getElementById('peers-section').style.display = 'none';
     } else {
-        peersElement.appendChild(
-            createTable(
-                ['Host', 'Status', 'Actions'],
-                [
-                    (dataCell: HTMLTableDataCellElement, item: Peer) => (dataCell.innerText = item.host),
-                    (dataCell: HTMLTableDataCellElement, item: Peer) => (dataCell.innerText = getStatusName(item.status)),
-                    (dataCell: HTMLTableDataCellElement, item: Peer) => {
-                        const button: HTMLButtonElement = document.createElement('button');
-                        button.onclick = () => removePeer(item);
-                        button.innerText = 'X';
-                        dataCell.appendChild(button);
-                    }
-                ],
-                data.peers
-            )
-        );
+        const peersElement: HTMLDivElement = <HTMLDivElement>document.getElementById('peers');
+        peersElement.innerHTML = '';
+        if (data.peers.length === 0) {
+            peersElement.appendChild(createTable([], [(dataCell: HTMLTableDataCellElement, item: Peer) => (dataCell.innerText = 'No peers added or not synced')], [1]));
+        } else {
+            peersElement.appendChild(
+                createTable(
+                    ['Host', 'Status', 'Actions'],
+                    [
+                        (dataCell: HTMLTableDataCellElement, item: Peer) => (dataCell.innerText = item.host),
+                        (dataCell: HTMLTableDataCellElement, item: Peer) => (dataCell.innerText = getStatusName(item.status)),
+                        (dataCell: HTMLTableDataCellElement, item: Peer) => {
+                            const button: HTMLButtonElement = document.createElement('button');
+                            button.onclick = () => removePeer(item);
+                            button.innerText = 'X';
+                            dataCell.appendChild(button);
+                        }
+                    ],
+                    data.peers
+                )
+            );
+        }
     }
 
     const jobsElement: HTMLDivElement = <HTMLDivElement>document.getElementById('jobs');
@@ -173,18 +177,6 @@ function removeJob(job: Job) {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({ id: job.id, updateTime: Date.now() })
-    })
-        .then(response => response.json())
-        .then(data => updateView(data));
-}
-
-function toggleMode() {
-    fetch(window.location.origin + Endpoints.TOGGLE_MODE, {
-        method: HTTPMethods.POST,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ singleMode: !singleMode })
     })
         .then(response => response.json())
         .then(data => updateView(data));

@@ -4,10 +4,10 @@
 
 <body>
     <header>
-        <h1 id="title" onclick="toggleMode()">Decentralized Scheduler</h1>
-        <h3 id="time">00:00:00</h3>
+        <h1 id="title">Decentralized Scheduler</h1>
+        <h3 id="time"></h3>
     </header>
-    <section>
+    <section id="jobs-section">
         <h2>Jobs</h2>
         <div id="jobs"></div>
         <form onsubmit="return addNewJob(this)">
@@ -32,7 +32,7 @@
             </div>
         </form>
     </section>
-    <section>
+    <section id="peers-section">
         <h2>Peers</h2>
         <div id="peers"></div>
         <form onsubmit="return addNewPeer(this)">

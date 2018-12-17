@@ -5,9 +5,12 @@ html {
     text-align: center;
 }
 
+body {
+    display: none;
+}
+
 h1 {
     margin: 20px 0;
-    cursor: pointer;
 }
 
 h3 {

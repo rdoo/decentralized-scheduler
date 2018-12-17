@@ -1,19 +1,27 @@
-import { CurrentJob, Job } from './job';
+import { readFile, writeFile } from 'fs';
+
+import { Job } from './job';
 import { Peer, PeerStatus } from './peer';
 import { getFromArrayById } from './utils/helpers';
 import { Logger } from './utils/logger';
-import { JobSerializedForSync, StateSerializedForSync, StateSerializedForWeb, SyncResult } from './utils/models';
+import { JobSerializedForSync, StateSerializedForPersistence, StateSerializedForSync, StateSerializedForWeb, SyncResult } from './utils/models';
 import { makeGetRequest } from './utils/requests';
 import { Settings } from './utils/settings';
 
 export class StateHandler {
     version: number = Settings.VERSION;
     myHost: string = null;
-    singleMode: boolean = false;
+    singleMode: boolean = IS_SINGLE_MODE;
     updateTime: number = 0;
     timeDiff: number = 0;
     peers: Peer[] = [];
     jobs: Job[] = [];
+
+    constructor() {
+        if (IS_SINGLE_MODE) {
+            this.readState();
+        }
+    }
 
     syncState(data: StateSerializedForSync) {
         if (data.u < this.updateTime) {
@@ -130,6 +138,10 @@ export class StateHandler {
             this.initNewJob(newJob);
             this.updateTime = updateTime;
             this.timeDiff = 0;
+
+            if (IS_SINGLE_MODE) {
+                this.saveState();
+            }
         }
         return success;
     }
@@ -149,6 +161,10 @@ export class StateHandler {
             this.jobs.splice(this.jobs.indexOf(jobToRemove), 1);
             this.updateTime = updateTime;
             this.timeDiff = 0;
+
+            if (IS_SINGLE_MODE) {
+                this.saveState();
+            }
         }
         return success;
     }
@@ -228,15 +244,22 @@ export class StateHandler {
     }
 
     initNewJob(newJob: Job) {
-        let voteTimeout: number = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
+        if (IS_SINGLE_MODE) {
+            const executeTimeout: number = newJob.nextExecute - Date.now() - this.timeDiff;
+            Logger.log('Initiating job', newJob.endpoint, 'with execute timeout', executeTimeout);
+            newJob.currentJob.jobTimeout = setTimeout(() => this.executeJob(newJob), executeTimeout);
+        } else {
+            let voteTimeout: number = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
 
-        while (voteTimeout < 0) {
-            newJob.markDone(1);
-            voteTimeout = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
+            while (voteTimeout < 0) {
+                newJob.markDone(1);
+                voteTimeout = newJob.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME;
+            }
+
+            Logger.log('Initiating job', newJob.endpoint, 'with vote timeout', voteTimeout);
+            newJob.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(newJob), voteTimeout);
         }
 
-        Logger.log('Initiating job', newJob.endpoint, 'with vote timeout', voteTimeout);
-        newJob.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(newJob), voteTimeout);
         this.jobs.push(newJob);
     }
 
@@ -271,10 +294,7 @@ export class StateHandler {
             if (job.currentJob.myVote === winnerVote) {
                 Logger.log('Victory');
 
-                if (job.currentJob.tries > Settings.JOB_TRIES_UNTIL_TERMINATE) {
-                    Logger.log('Terminating job', job.endpoint);
-                    this.handleJobDone(job);
-                } else if (job.currentJob.votes.length > 1 || this.singleMode) {
+                if (job.currentJob.votes.length > 1) {
                     job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job), executeTime);
                 } else {
                     job.currentJob.jobTimeout = setTimeout(() => this.checkIfExecuted(job, job.executions), executeTime + Settings.EXECUTE_WINDOW);
@@ -286,18 +306,22 @@ export class StateHandler {
     }
 
     async executeJob(job: Job) {
-        Logger.log('Executing job', job.endpoint);
-        try {
-            await makeGetRequest(job.endpoint);
-        } catch (error) {
-            Logger.error(error);
-            let executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
-            if (executeTime < 0) {
-                executeTime = 0;
-            }
+        if (job.currentJob.tries > Settings.JOB_TRIES_UNTIL_TERMINATE) {
+            Logger.log('Terminating job', job.endpoint);
+        } else {
+            Logger.log('Executing job', job.endpoint);
+            try {
+                await makeGetRequest(job.endpoint);
+            } catch (error) {
+                Logger.error(error);
+                let executeTime: number = job.nextExecute - Date.now() - this.timeDiff;
+                if (executeTime < 0) {
+                    executeTime = 0;
+                }
 
-            job.currentJob.jobTimeout = setTimeout(() => this.checkIfExecuted(job, job.executions), executeTime + Settings.EXECUTE_WINDOW);
-            return;
+                job.currentJob.jobTimeout = setTimeout(() => this.checkIfExecuted(job, job.executions), executeTime + Settings.EXECUTE_WINDOW);
+                return;
+            }
         }
 
         this.handleJobDone(job);
@@ -305,13 +329,16 @@ export class StateHandler {
 
     checkIfExecuted(job: Job, executions: number) {
         Logger.log('Checking execution', job.endpoint);
-        const currentJob: CurrentJob = job.currentJob;
         if (job.executions === executions + 1) {
             Logger.log('Job was executed');
         } else {
             Logger.log('Trying once again', job.currentJob.tries + 1);
             job.vote();
-            currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), Settings.EXTRA_VOTE_DELAY);
+            if (IS_SINGLE_MODE) {
+                job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job));
+            } else {
+                job.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), Settings.EXTRA_VOTE_DELAY);
+            }
         }
     }
 
@@ -326,18 +353,21 @@ export class StateHandler {
     handleLocalJobDone(job: Job, timesDone: number) {
         Logger.log('Job done', job.endpoint);
         job.markDone(timesDone);
-        job.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), job.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME);
+
+        if (IS_SINGLE_MODE) {
+            job.currentJob.jobTimeout = setTimeout(() => this.executeJob(job), job.nextExecute - Date.now() - this.timeDiff);
+        } else {
+            job.currentJob.jobTimeout = setTimeout(() => this.getVotesFromPeers(job), job.nextExecute - Date.now() - this.timeDiff - Settings.VOTING_START_TIME);
+        }
     }
 
     getJobVote(id: number, executions: number): number {
         const job: Job = this.getJob(id);
         if (job) {
-            if (job.executions === executions) {
-                return job.currentJob.myVote;
-            } else if (job.executions < executions) {
+            if (job.executions < executions) {
                 this.handleLocalJobDone(job, executions - job.executions);
-                return job.currentJob.myVote;
             }
+            return job.currentJob.myVote;
         }
         return -1;
     }
@@ -347,12 +377,44 @@ export class StateHandler {
         if (job) {
             if (job.executions === executions) {
                 this.handleLocalJobDone(job, 1);
-                return true;
             } else if (job.executions < executions) {
                 this.handleLocalJobDone(job, executions - job.executions + 1);
-                return true;
             }
+            return true;
         }
         return false;
+    }
+
+    saveState() {
+        writeFile(
+            Settings.PERSISTENCE_FILE_PATH,
+            JSON.stringify({ updateTime: this.updateTime, timeDiff: this.timeDiff, jobs: this.jobs.map(job => job.serializeForPersistence()) }),
+            error => {
+                if (error) {
+                    Logger.error(error);
+                }
+            }
+        );
+    }
+
+    readState() {
+        readFile(Settings.PERSISTENCE_FILE_PATH, (error, data) => {
+            if (error) {
+                Logger.error(error);
+            } else {
+                try {
+                    const stateSerialized: StateSerializedForPersistence = JSON.parse(data.toString());
+
+                    this.updateTime = stateSerialized.updateTime || 0;
+                    this.timeDiff = stateSerialized.timeDiff || 0;
+
+                    if (stateSerialized.jobs && stateSerialized.jobs.length > 0) {
+                        stateSerialized.jobs.map(job => this.initNewJob(new Job(job.id, job.endpoint, job.startTime, job.intervalValue, job.intervalUnit)));
+                    }
+                } catch (error) {
+                    Logger.error(error);
+                }
+            }
+        });
     }
 }

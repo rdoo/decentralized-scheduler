@@ -89,3 +89,17 @@ export interface SyncResult {
     success: boolean;
     peer: Peer;
 }
+
+export interface StateSerializedForPersistence {
+    updateTime: number;
+    timeDiff: number;
+    jobs: JobSerializedForPersistence[];
+}
+
+export interface JobSerializedForPersistence {
+    id: number;
+    endpoint: string;
+    startTime: number;
+    intervalValue: number;
+    intervalUnit: IntervalUnits;
+}

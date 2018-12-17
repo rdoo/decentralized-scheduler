@@ -4,7 +4,9 @@
   "license": "MIT",
   "scripts": {
     "start": "webpack --watch --mode development",
-    "build": "webpack --mode production"
+    "build": "webpack --mode production",
+    "start:single": "webpack --watch --mode development --env.single",
+    "build:single": "webpack --mode production --env.single"
   },
   "devDependencies": {
     "@types/node": "10.12.15",

@@ -1,6 +1,6 @@
 import { IntervalUnits, TimeConstants } from './utils/constants';
 import { randomInteger } from './utils/helpers';
-import { JobSerializedForSync, JobSerializedForWeb } from './utils/models';
+import { JobSerializedForPersistence, JobSerializedForSync, JobSerializedForWeb } from './utils/models';
 
 export interface CurrentJob {
     jobTimeout?: any;
@@ -28,6 +28,11 @@ export class Job {
         this.executions = executions;
         this.nextExecute = this.calculateExecuteTime();
         this.createCurrentJob();
+
+        const currentTime: number = new Date().getTime();
+        while (this.nextExecute < currentTime) {
+            this.markDone(1);
+        }
     }
 
     calculateExecuteTime() {
@@ -111,6 +116,16 @@ export class Job {
             intervalUnit: this.intervalUnit,
             executions: this.executions,
             nextExecute: this.nextExecute
+        };
+    }
+
+    serializeForPersistence(): JobSerializedForPersistence {
+        return {
+            id: this.id,
+            endpoint: this.endpoint,
+            startTime: this.startTime,
+            intervalValue: this.intervalValue,
+            intervalUnit: this.intervalUnit
         };
     }
 }

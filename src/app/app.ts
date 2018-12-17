@@ -161,14 +161,6 @@ export class ServerApp {
                         }
                     });
                     break;
-                case Endpoints.TOGGLE_MODE:
-                    request.on('end', async () => {
-                        const body: ToggleModeRequestBody = JSON.parse(bodyString);
-                        this.stateHandler.singleMode = body.singleMode;
-                        response.writeHead(HTTPCodes.OK);
-                        response.end(JSON.stringify(this.stateHandler.getStateForWeb()));
-                    });
-                    break;
                 default:
                     Logger.log(url);
                     response.writeHead(HTTPCodes.NOT_FOUND);
